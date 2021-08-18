@@ -1,8 +1,7 @@
 #include <Arduino.h>
 #include <Servo.h>
 Servo myservo; // declare servo
-
-
+int integerdata;
 String comdata;
 
 void setup ()
@@ -33,7 +32,7 @@ void SerialChecker()
       comdata += char(Serial.read()); //Add the character value to comdata
       delay(2);//so that whole message is sent before the arduino reads it
       integerdata = comdata.toInt(); //converts our character data into a number
-      blinktime = integerdata;
+      
     }
     Serial.println(comdata);//prints out what you are typing
   }
