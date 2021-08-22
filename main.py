@@ -1,10 +1,13 @@
-import os.path
 from threading import Thread
 from serial import Serial
 from serial.tools.list_ports import comports
-from time import sleep
+from time import time, sleep
 import math
-from FOCMCInterface import Motor
+
+from lib.bezier import bezier
+
+from hardware.FOCMCInterface import Motor
+from hardware.ServoInterface import Servo as EndEffector
 
 import tkinter as tk
 import tkinter.ttk as ttk
@@ -29,32 +32,44 @@ class RobotArm:
     m4: Motor
         Motor 4, the end effector motor.
     """
+
+    # Only one instance of RobotArm is intended to exist at a time.
+    motors: dict[int, Motor] = {}
     l1: float = 15.5
     l2: float = 15.25
     minimumRadius: float = 10
 
     def __init__(self, app):
         self.app = app
-        devices = [Motor(str(d.device))
-                   for d in comports() if d.description == 'Adafruit Feather M0']
+        try:
 
-        self.motors = {motor.id: motor for motor in devices}
+            for d in comports():
+                if d.description == Motor.deviceName:
+                    m = Motor(str(d.device))
+                    if (id := m.id) is not None:
+                        self.motors[id] = m
+                    else:
+                        raise NotImplementedError('Unidentifiable motor.')
+                elif d.description == EndEffector.deviceName:
+                    self.endEffector = EndEffector(str(d.device))
 
-        self.m1 = self.motors[1]
-        self.m2 = self.motors[2]
-        self.m3 = self.motors[3]
-        self.m4 = self.motors[4]
+            self.m1 = self.motors[1]
+            self.m2 = self.motors[2]
+            self.m3 = self.motors[3]
+            self.m4 = self.motors[4]
 
-        self.m2.setVoltageLimit(3)
-        self.m2.setPIDs('vel', 2, 20, R=200, F=0.01)
-        self.m2.setPIDs('angle', 30, D=5, R=125, F=0.01)
+            self.m2.setVoltageLimit(6)
+            self.m2.setPIDs('vel', 2, 20, R=200, F=0.01)
+            self.m2.setPIDs('angle', 30, D=5, R=125, F=0.01)
 
-        self.m3.setVoltageLimit(3)
-        self.m3.setPIDs('vel', .6, 20, F=0.01)
-        self.m3.setPIDs('angle', 20, D=3, R=100, F=0.01)
+            self.m3.setVoltageLimit(3)
+            self.m3.setPIDs('vel', .6, 20, F=0.01)
+            self.m3.setPIDs('angle', 20, D=3, R=100, F=0.01)
+        except KeyError:
+            raise NotImplementedError(
+                'A serial connection could not be established with at least one motor.')
 
     def loadMotors(self):
-
         self.singleEndedHome(self.m1, 45, -2)
 
         try:
@@ -195,6 +210,24 @@ class RobotArm:
 
         return angle
 
+    def polarToCartesian(self, t1: float, t2: float) -> tuple[float, float]:
+        """
+        Convert polar coordinates to cartesian.
+
+        Parameters
+        ----------
+        t1: float
+            The angle of the first motor.
+        t2: float
+            The angle of the second motor.
+
+        Returns
+        -------
+        tuple[float, float]
+            The cartesian coordinates of the end effector.
+        """
+        return self.l1*math.cos(-t1) + self.l2*math.cos(-t2), self.l1*math.sin(t1) + self.l2*math.sin(t2)
+
     def cartesianToDualPolar(self, x: float, y: float):
         r = (x**2 + y**2)**0.5
         a = math.atan2(y, x)
@@ -236,6 +269,38 @@ class RobotArm:
             return self.cartesianToDualPolar(
                 (self.minimumRadius+0.1)*math.cos(a), (self.minimumRadius+0.1)*math.sin(a))
 
+    def jog(self, **kwargs):
+        self.m2.move(kwargs['t1'])
+        if (p := self.m2.position) is not None:
+            self.m4.move(kwargs['r']-p)
+
+        self.m3.move(kwargs['t2'])
+        self.m1.move(kwargs['z'])
+        if 'e' in kwargs:
+            self.endEffector.move(kwargs['e'])
+
+    def smoothMove(self, duration, **end) -> None:
+        """
+        Smoothly move the motors to a target position.
+
+        This function is intended to be launched in a thread.
+        """
+
+        if (t1 := self.m2.position) is not None and (t2 := self.m3.position) is not None and (z := self.m1.position) is not None and (r := self.m4.position) is not None:
+            start = {'t1': t1, 't2': t2, 'z': z, 'r': r+t1}
+        else:
+            raise NotImplementedError(
+                'Unable to retreive motor positions for smooth move')
+
+        self.jog(**start, e=end['e'])
+        startTime = time()
+        while (t := time() - startTime) < duration:
+            tmp = {}
+            for axis in start:
+                tmp[axis] = bezier(0, start[axis], duration/2, start[axis],
+                                   duration/2, end[axis], duration, end[axis], t)
+            self.jog(**tmp)
+
 
 class Popup(tk.Toplevel):
     def __init__(self, parent, title=None):
@@ -249,114 +314,224 @@ class Popup(tk.Toplevel):
         self.grab_release()
         tk.Toplevel.destroy(self)
 
+    def center(self):
+        self.update()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        wr = self.master.winfo_width()
+        hr = self.master.winfo_height()
+        x = self.master.winfo_rootx() + wr//2 - w//2
+        y = self.master.winfo_rooty() + hr//2 - h//2
+
+        self.geometry(f'+{x}+{y}')
+
 
 class Application(ttk.Frame):
     def __init__(self, master=None):
         ttk.Frame.__init__(self, master)
         self.pack(fill='both', expand=True)
 
-        self.robotarm = RobotArm(self)
-        self.robotarm.loadMotors()
+        root.bind('<Up>', lambda _: self.updateTargets(
+            y=self.targetYVar.get()+0.1))
+        root.bind('<Down>', lambda _: self.updateTargets(
+            y=self.targetYVar.get()-0.1))
+        root.bind('<Left>', lambda _: self.updateTargets(
+            x=self.targetXVar.get()+0.1))
+        root.bind('<Right>', lambda _: self.updateTargets(
+            x=self.targetXVar.get()-0.1))
+        root.bind('w', lambda _: self.updateTargets(
+            z=self.targetZVar.get()+0.1))
+        root.bind('s', lambda _: self.updateTargets(
+            z=self.targetZVar.get()-0.1))
+        root.bind('a', lambda _: self.updateTargets(
+            r=self.targetRVar.get()+0.1))
+        root.bind('d', lambda _: self.updateTargets(
+            r=self.targetRVar.get()-0.1))
+        root.bind('q', lambda _: self.updateTargets(
+            e=self.targetEVar.get()+1))
+        root.bind('e', lambda _: self.updateTargets(
+            e=self.targetEVar.get()-1))
 
+        self.initPopup = tk.Toplevel(self)
+        self.initPopup.geometry("500x100")
+        self.initPopup.protocol("WM_DELETE_WINDOW", lambda: None)
+        ttk.Label(self.initPopup, text="Initializing...").pack(side='top')
+
+        progress_bar = ttk.Progressbar(
+            self.initPopup, mode='indeterminate', value=1)
+        progress_bar.pack(fill='x', expand=1, side='bottom', padx=10, pady=10)
+
+        # Initialize Up Robot Arm
+        self.robotarm = RobotArm(self)
+        # Comment out for GUI work
+        Thread(target=self.initRobotArm, daemon=True).start()
+
+    def initRobotArm(self):
+        self.robotarm.loadMotors()
+        self.initPopup.destroy()
+        self.createWidgets()
+
+    def createWidgets(self):
+        # Inside of Self
+        r = 0
         self.controlFrame = ttk.Frame(self)
-        self.controlFrame.grid(row=1, column=0, sticky='WE')
+        self.controlFrame.pack(side='left', fill='both', expand=True)
+
+        # Inside of ControlFrame
+        r, c = 0, 0
+
+        sliderFrame = ttk.Frame(self.controlFrame)
+        sliderFrame.grid(row=r, column=c, sticky='WE')
+
+        r += 1
+
+        tk.Button(self.controlFrame, text='Emergency Stop', fg='#F00000',
+                  command=self.robotarm.disableAll).grid(row=r, column=c, sticky='W', padx=5, pady=5)
+
+        # Inside of SliderFrame
         r = 0
 
-        self.motorConfigButton = ttk.Button(
-            self.controlFrame, text='Motors...', command=self.configureMotorsPanel)
-        self.motorConfigButton.grid(row=r, sticky='E')
+        ttk.Label(sliderFrame, text='Axis Motors', font='Helvetica 16 bold').grid(
+            row=r, column=0, sticky='W', padx=5, pady=5)
+        ttk.Separator(sliderFrame, orient='horizontal').grid(
+            sticky='WE', columnspan=3, padx=5, pady=5)
+
+        r += 2
+
+        self.targetXVar = tk.DoubleVar()
+        self.targetXVar.set(15)
+        self.targetXLabel = ttk.Label(sliderFrame, text='Target X:')
+        self.targetXLabel.grid(row=r, padx=5)
+
+        self.targetXEntry = ttk.Entry(
+            sliderFrame, textvariable=self.targetXVar, width=5)
+        self.targetXEntry.grid(row=r, column=1, padx=5)
+        self.targetXEntry.bind('<Return>', lambda _: Thread(
+            target=self.jog, daemon=True).start())
+
+        self.targetXSlider = ttk.Scale(sliderFrame, variable=self.targetXVar, command=lambda x: self.updateTargets(
+            x=round(float(x), 2)), from_=0, to=30, orient='horizontal')
+        self.targetXSlider.grid(row=r, column=2, padx=5)
+
+        r += 1
+
+        self.targetYVar = tk.DoubleVar()
+        self.targetYLabel = ttk.Label(sliderFrame, text='Target Y:')
+        self.targetYLabel.grid(row=r, padx=5)
+
+        self.targetYEntry = ttk.Entry(
+            sliderFrame, textvariable=self.targetYVar, width=5)
+        self.targetYEntry.grid(row=r, column=1, padx=5)
+        self.targetYEntry.bind('<Return>', lambda _: Thread(
+            target=self.jog, daemon=True).start())
+
+        self.targetYSlider = ttk.Scale(sliderFrame, variable=self.targetYVar, command=lambda y: self.updateTargets(
+            y=round(float(y), 2)), from_=-30, to=30, orient='horizontal')
+        self.targetYSlider.grid(row=r, column=2, padx=5)
+
+        r += 1
+
+        self.targetZVar = tk.DoubleVar()
+        self.targetZVar.set(45)
+        self.targetZLabel = ttk.Label(sliderFrame, text='Target Z:')
+        self.targetZLabel.grid(row=r, padx=5)
+
+        self.targetZEntry = ttk.Entry(
+            sliderFrame, textvariable=self.targetZVar, width=5)
+        self.targetZEntry.grid(row=r, column=1, padx=5)
+        self.targetZEntry.bind('<Return>', lambda _: Thread(
+            target=self.jog, daemon=True).start())
+
+        self.targetZSlider = ttk.Scale(sliderFrame, variable=self.targetZVar, command=lambda z: self.updateTargets(
+            z=round(float(z), 2)), from_=0, to=90, orient='horizontal')
+        self.targetZSlider.grid(row=r, column=2, padx=5)
+
+        r += 1
+
+        self.targetRVar = tk.DoubleVar()
+        self.targetRLabel = ttk.Label(sliderFrame, text='Target R:')
+        self.targetRLabel.grid(row=r, padx=5)
+
+        self.targetREntry = ttk.Entry(
+            sliderFrame, textvariable=self.targetRVar, width=5)
+        self.targetREntry.grid(row=r, column=1, padx=5)
+        self.targetREntry.bind('<Return>', lambda _: Thread(
+            target=self.jog, daemon=True).start())
+
+        self.targetRSlider = ttk.Scale(sliderFrame, variable=self.targetRVar, command=lambda r: self.updateTargets(
+            r=round(float(r), 2)), from_=-1.57, to=1.57, orient='horizontal')
+        self.targetRSlider.grid(row=r, column=2, padx=5)
+
+        r += 1
+
+        ttk.Label(sliderFrame, text='End Effector', font='Helvetica 16 bold').grid(
+            row=r, column=0, sticky='W', padx=5, pady=5)
+        ttk.Separator(sliderFrame, orient='horizontal').grid(
+            sticky='WE', columnspan=3, padx=5, pady=5)
+
+        r += 2
+
+        self.targetEVar = tk.IntVar()
+        self.targetEVar.set(sum(self.robotarm.endEffector.valueRange)//2)
+        self.targetELabel = ttk.Label(sliderFrame, text='Target E:')
+        self.targetELabel.grid(row=r, padx=5)
+
+        self.targetEEntry = ttk.Entry(
+            sliderFrame, textvariable=self.targetEVar, width=5)
+        self.targetEEntry.grid(row=r, column=1, padx=5)
+        self.targetEEntry.bind('<Return>', lambda _: Thread(
+            target=self.jog, daemon=True).start())
+
+        self.targetESlider = ttk.Scale(sliderFrame, variable=self.targetEVar, command=lambda e: self.updateTargets(
+            e=round(float(e))), from_=self.robotarm.endEffector.valueRange[0], to=self.robotarm.endEffector.valueRange[1], orient='horizontal')
+        self.targetESlider.grid(row=r, column=2, padx=5)
 
         r += 1
 
         self.realtimeVar = tk.BooleanVar()
         self.realtimeToggle = ttk.Checkbutton(
-            self.controlFrame, variable=self.realtimeVar, text='Realtime')
-        self.realtimeToggle.grid(row=r, sticky='W')
+            sliderFrame, variable=self.realtimeVar, text='Realtime')
+        self.realtimeToggle.grid(row=r, column=1, sticky='W', padx=5, pady=5)
+
+        self.jogButton = ttk.Button(sliderFrame, text='Jog',
+                                    command=self.jog)
+        self.jogButton.grid(row=r, column=2, padx=5, pady=5)
 
         r += 1
-
-        self.targetXVar = tk.DoubleVar()
-        self.targetXLabel = ttk.Label(self.controlFrame, text='Target X:')
-        self.targetXLabel.grid(row=r, sticky='E')
-
-        self.targetXEntry = ttk.Entry(
-            self.controlFrame, textvariable=self.targetXVar, width=10)
-        self.targetXEntry.grid(row=r, column=1, sticky='W')
-        self.targetXEntry.bind('<Return>', lambda _: self.jog())
-
-        self.targetXSlider = ttk.Scale(self.controlFrame, variable=self.targetXVar, command=lambda x: self.updateTargets(
-            x=round(float(x), 1)), from_=0, to=30, orient='horizontal')
-        self.targetXSlider.grid(row=r, column=2, sticky='W')
-
-        r += 1
-
-        self.targetYVar = tk.DoubleVar()
-        self.targetYLabel = ttk.Label(self.controlFrame, text='Target Y:')
-        self.targetYLabel.grid(row=r, sticky='E')
-
-        self.targetYEntry = ttk.Entry(
-            self.controlFrame, textvariable=self.targetYVar, width=10)
-        self.targetYEntry.grid(row=r, column=1, sticky='W')
-        self.targetYEntry.bind('<Return>', lambda _: self.jog())
-
-        self.targetYSlider = ttk.Scale(self.controlFrame, variable=self.targetYVar, command=lambda y: self.updateTargets(
-            y=round(float(y), 1)), from_=-30, to=30, orient='horizontal')
-        self.targetYSlider.grid(row=r, column=2, sticky='W')
-
-        r += 1
-
-        self.targetZVar = tk.DoubleVar()
-        self.targetZLabel = ttk.Label(self.controlFrame, text='Target Z:')
-        self.targetZLabel.grid(row=r, sticky='E')
-
-        self.targetZEntry = ttk.Entry(
-            self.controlFrame, textvariable=self.targetZVar, width=10)
-        self.targetZEntry.grid(row=r, column=1, sticky='W')
-        self.targetZEntry.bind('<Return>', lambda _: self.jog())
-
-        self.targetZSlider = ttk.Scale(self.controlFrame, variable=self.targetZVar, command=lambda z: self.updateTargets(
-            z=round(float(z), 1)), from_=0, to=90, orient='horizontal')
-        self.targetZSlider.grid(row=r, column=2, sticky='W')
-
-        r += 1
-
-        self.targetRVar = tk.DoubleVar()
-        self.targetRLabel = ttk.Label(self.controlFrame, text='Target R:')
-        self.targetRLabel.grid(row=r, sticky='E')
-
-        self.targetREntry = ttk.Entry(
-            self.controlFrame, textvariable=self.targetRVar, width=10)
-        self.targetREntry.grid(row=r, column=1, sticky='W')
-        self.targetREntry.bind('<Return>', lambda _: self.jog())
-
-        self.targetRSlider = ttk.Scale(self.controlFrame, variable=self.targetRVar, command=lambda r: self.updateTargets(
-            r=round(float(r), 1)), from_=-1.57, to=1.57, orient='horizontal')
-        self.targetRSlider.grid(row=r, column=2, sticky='W')
-
-        self.requiresConnectedMotors = []
-        self.assignedPerMotor = []
 
         # Menubar
         menubar = tk.Menu(self)
-        calibrateMenu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='Calibrate', menu=calibrateMenu)
-        calibrateMenu.add_command(
+        fileMenu = tk.Menu(menubar, tearoff=0)
+        toolsMenu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='File', menu=fileMenu)
+        menubar.add_cascade(label='Tools', menu=toolsMenu)
+        fileMenu.add_command(label='Load Job')
+        fileMenu.add_command(label='Save Job')
+        toolsMenu.add_command(label='Record Job')
+        toolsMenu.add_command(
+            label='Motors...', command=self.configureMotorsPanel)
+        toolsMenu.add_command(
             label='Calibration Wizard', command=self.calibrateWizardStep1)
         root.config(menu=menubar)
 
     def calibrateWizardStep1(self):
         self.popup = Popup(self)
-        self.popup.geometry('300x300')
+        self.popup.geometry('400x400')
         self.popup.title('Calibration Wizard')
+        self.popup.center()
 
         self.contentFrame = ttk.Frame(self.popup)
         self.contentFrame.pack(side='top', fill='both', expand=True)
+        self.contentFrame.grid_rowconfigure(0, weight=1)
+        self.contentFrame.grid_rowconfigure(10, weight=1)
+        self.contentFrame.grid_columnconfigure(0, weight=1)
+        self.contentFrame.grid_columnconfigure(2, weight=1)
 
         buttons = ttk.Frame(self.popup)
         buttons.pack(side='bottom', fill='x')
 
         self.continueButton = ttk.Button(buttons, text='Continue', command=lambda: Thread(
-            target=self.calibrateWizardStep2).start())
+            target=self.calibrateWizardStep2, daemon=True).start())
         self.continueButton.pack(side='right')
         self.cancelButton = ttk.Button(buttons, text='Cancel',
                                        command=self.popup.destroy)
@@ -365,9 +540,9 @@ class Application(ttk.Frame):
         r, c = 1, 1
 
         ttk.Label(self.contentFrame, text='Motor 2', font='Helvetica 18 bold').grid(
-            row=r, column=c, sticky='W')
+            row=r, column=c, sticky='W', padx=5, pady=5)
         ttk.Separator(self.contentFrame, orient='horizontal').grid(
-            column=c, sticky='EW')
+            column=c, sticky='WE', padx=5, pady=5)
 
         ttk.Label(self.contentFrame, text="""Motor 2 requires manual calibration.
 The motor will start slowly rotating left.
@@ -375,7 +550,7 @@ Let the motor spin as far as you are comfortable
 and stop it with your hand when you are ready.
 Click continue to begin.
                      """
-                  ).grid(column=c, sticky='W')
+                  ).grid(column=c, sticky='W', padx=5, pady=5)
 
         self.robotarm.disableAll()
         for motor in self.robotarm.motors.values():
@@ -405,16 +580,16 @@ Click continue to begin.
         r, c = 1, 1
 
         ttk.Label(self.contentFrame, text='Motor 2', font='Helvetica 18 bold').grid(
-            row=r, column=c, sticky='W')
+            row=r, column=c, sticky='W', padx=5, pady=5)
         ttk.Separator(self.contentFrame, orient='horizontal').grid(
-            column=c, sticky='EW')
+            column=c, sticky='WE', padx=5, pady=5)
 
         ttk.Label(self.contentFrame, text="""Now the motor will rotate to the right.
 Let the motor spin as far as you are comfortable
 and stop it with your hand when you are ready.
 Click continue to begin.
                      """
-                  ).grid(column=c, sticky='W')
+                  ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def calibrateWizardStep3(self):
         self.continueButton['text'] = 'Working...'
@@ -440,14 +615,14 @@ Click continue to begin.
         r, c = 1, 1
 
         ttk.Label(self.contentFrame, text='Motor 2', font='Helvetica 18 bold').grid(
-            row=r, column=c, sticky='W')
+            row=r, column=c, sticky='W', padx=5, pady=5)
         ttk.Separator(self.contentFrame, orient='horizontal').grid(
-            column=c, sticky='EW')
+            column=c, sticky='WE', padx=5, pady=5)
 
         ttk.Label(self.contentFrame, text="""Position the motor where you would like the center to be.
 Click continue to begin.
                      """
-                  ).grid(column=c, sticky='W')
+                  ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def calibrateWizardStep4(self):
         self.continueButton['text'] = 'Working...'
@@ -478,13 +653,13 @@ Click continue to begin.
         r, c = 1, 1
 
         ttk.Label(self.contentFrame, text='Motor 4', font='Helvetica 18 bold').grid(
-            row=r, column=c, sticky='W')
+            row=r, column=c, sticky='W', padx=5, pady=5)
         ttk.Separator(self.contentFrame, orient='horizontal').grid(
-            column=c, sticky='EW')
+            column=c, sticky='WE', padx=5, pady=5)
 
         ttk.Label(self.contentFrame, text="""Position the motor where you would like the left extreme to be.
 Click continue to begin."""
-                  ).grid(column=c, sticky='W')
+                  ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def calibrateWizardStep5(self, word='left'):
         self.continueButton['text'] = 'Working...'
@@ -498,7 +673,7 @@ Click continue to begin."""
             self.wizardFailed()
             return
 
-        with open('config/m4', 'a') as f:
+        with open('config/m4', 'w' if word == 'left' else 'a') as f:
             f.write(f'{value}\n')
 
         if word != 'center':
@@ -526,12 +701,12 @@ Click continue to begin."""
         r, c = 1, 1
 
         ttk.Label(self.contentFrame, text='Motor 4', font='Helvetica 18 bold').grid(
-            row=r, column=c, sticky='W')
+            row=r, column=c, sticky='W', padx=5, pady=5)
         ttk.Separator(self.contentFrame, orient='horizontal').grid(
-            column=c, sticky='EW')
+            column=c, sticky='WE', padx=5, pady=5)
         ttk.Label(self.contentFrame, text=f"""Position the motor where you would like the {word} to be.
 Click continue to begin."""
-                  ).grid(column=c, sticky='W')
+                  ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def calibrateWizardStep6(self):
         self.continueButton['text'] = 'Working...'
@@ -553,11 +728,11 @@ Click continue to begin."""
         r, c = 1, 1
 
         ttk.Label(self.contentFrame, text='Motor 3', font='Helvetica 18 bold').grid(
-            row=r, column=c, sticky='W')
+            row=r, column=c, sticky='W', padx=5, pady=5)
         ttk.Separator(self.contentFrame, orient='horizontal').grid(
-            column=c, sticky='EW')
+            column=c, sticky='WE', padx=5, pady=5)
         ttk.Label(self.contentFrame, text='Motor 3 can self calibrate,\nclick Continue to begin.'
-                  ).grid(column=c, sticky='W')
+                  ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def calibrateWizardStep7(self):
         self.continueButton['text'] = 'Working...'
@@ -578,12 +753,12 @@ Click continue to begin."""
         r, c = 1, 1
 
         ttk.Label(self.contentFrame, text='Calibration Complete', font='Helvetica 18 bold').grid(
-            row=r, column=c, sticky='W')
+            row=r, column=c, sticky='W', padx=5, pady=5)
         ttk.Separator(self.contentFrame, orient='horizontal').grid(
-            column=c, sticky='EW')
+            column=c, sticky='WE', padx=5, pady=5)
 
         ttk.Label(self.contentFrame, text='Click finish to close this window.'
-                  ).grid(column=c, sticky='W')
+                  ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def wizardFailed(self):
         pass
@@ -730,40 +905,45 @@ Click continue to begin."""
         # PIDs
 
         # Center
-        popup.update()
-        w = popup.winfo_width()
-        h = popup.winfo_height()
-        wr = popup.master.winfo_width()
-        hr = popup.master.winfo_height()
-        x = popup.master.winfo_rootx() + wr//2 - w//2
-        y = popup.master.winfo_rooty() + hr//2 - h//2
-
-        popup.geometry(f'+{x}+{y}')
+        popup.center()
 
     def selectMotor(self, motor):
         pass
 
-    def updateTargets(self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None, r: Optional[float] = None):
-        if x is not None:
-            self.targetXVar.set(x)
-        if y is not None:
-            self.targetYVar.set(y)
-        if z is not None:
-            self.targetZVar.set(z)
-        if r is not None:
-            self.targetRVar.set(r)
+    def updateTargets(self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None, r: Optional[float] = None, e: Optional[int] = None):
+        digits = 3
 
-        self.jog()
+        if x is not None:
+            self.targetXVar.set(round(x, digits))
+        if y is not None:
+            self.targetYVar.set(round(y, digits))
+        if z is not None:
+            self.targetZVar.set(round(z, digits))
+        if r is not None:
+            self.targetRVar.set(round(r, digits))
+        if e is not None:
+            self.targetEVar.set(e)
+
+        if self.realtimeVar.get():
+            self.jog()
 
     def jog(self):
-        t1, t2 = self.robotarm.cartesianToDualPolar(
-            self.targetXVar.get(), self.targetYVar.get()
-        )
+        self.jogButton['state'] = 'disabled'
 
-        self.robotarm.m2.move(t1)
-        self.robotarm.m4.move(self.targetRVar.get()-t1)
-        self.robotarm.m3.move(t2)
-        self.robotarm.m1.move(self.targetZVar.get())
+        t1, t2 = self.robotarm.cartesianToDualPolar(
+            self.targetXVar.get(), self.targetYVar.get())
+        if self.realtimeVar.get():
+            self.robotarm.jog(t1=t1, t2=t2, z=self.targetZVar.get(
+            ), r=self.targetRVar.get(), e=self.targetEVar.get())
+        else:
+            self.robotarm.smoothMove(2, t1=t1, t2=t2, z=self.targetZVar.get(
+            ), r=self.targetRVar.get(), e=self.targetEVar.get())
+
+        self.jogButton['state'] = 'normal'
+
+    def on_close(self):
+        self.robotarm.disableAll()
+        root.destroy()
 
 
 if __name__ == '__main__':
@@ -771,4 +951,5 @@ if __name__ == '__main__':
     root.title('Robot Arm')
     app = Application(root)
     root.eval('tk::PlaceWindow . center')
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
     app.mainloop()
