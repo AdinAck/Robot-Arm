@@ -1,10 +1,10 @@
 from threading import Thread
-from serial import Serial
 from serial.tools.list_ports import comports
 from time import time, sleep
 import math
 
 from lib.bezier import bezier
+from lib.gcode import readGcodeLine, writeGcodeLine
 
 from hardware.FOCMCInterface import Motor
 from hardware.ServoInterface import Servo as EndEffector
@@ -68,6 +68,16 @@ class RobotArm:
         except KeyError:
             raise NotImplementedError(
                 'A serial connection could not be established with at least one motor.')
+
+    def test(self):
+        sleep(3)
+        with open('test.gcode', 'r') as f:
+            for line in f.readlines():
+                tmp = {command: value for command,
+                       value in readGcodeLine(line)}
+                t1, t2 = self.cartesianToDualPolar(tmp['x'], tmp['y'])
+                self.smoothMove(
+                    2, t1=t1, t2=t2, z=tmp['z'], r=tmp['r'], e=tmp['e'])
 
     def loadMotors(self):
         self.singleEndedHome(self.m1, 45, -2)
@@ -269,17 +279,18 @@ class RobotArm:
             return self.cartesianToDualPolar(
                 (self.minimumRadius+0.1)*math.cos(a), (self.minimumRadius+0.1)*math.sin(a))
 
-    def jog(self, **kwargs):
+    def jog(self, timeout=1, epsilon=0.02, **kwargs):
         self.m2.move(kwargs['t1'])
-        if (p := self.m2.position) is not None:
-            self.m4.move(kwargs['r']-p)
+        # if (p := self.m2.position) is not None:
+        #     self.m4.move(kwargs['r']-p)
+        self.m4.move(kwargs['r']-kwargs['t1'])
 
         self.m3.move(kwargs['t2'])
         self.m1.move(kwargs['z'])
         if 'e' in kwargs:
             self.endEffector.move(kwargs['e'])
 
-    def smoothMove(self, duration, **end) -> None:
+    def smoothMove(self, duration, timeout=1, epsilon=0.1, **end) -> None:
         """
         Smoothly move the motors to a target position.
 
@@ -295,11 +306,20 @@ class RobotArm:
         self.jog(**start, e=end['e'])
         startTime = time()
         while (t := time() - startTime) < duration:
-            tmp = {}
-            for axis in start:
-                tmp[axis] = bezier(0, start[axis], duration/2, start[axis],
-                                   duration/2, end[axis], duration, end[axis], t)
-            self.jog(**tmp)
+            self.jog(**{axis: bezier(0, start[axis], duration/2, start[axis],
+                                     duration/2, end[axis], duration, end[axis], t) for axis in start})
+
+        startTime = time()
+        while time() - startTime < timeout:
+            sleep(0.1)
+            if (p1 := self.m2.position) is not None and (p2 := self.m3.position) is not None and (p3 := self.m1.position) is not None and (p4 := self.m4.position) is not None:
+                if abs(end['t1']-p1) < epsilon and abs(end['t2']-p2) < epsilon and abs(end['z']-p3) < epsilon and abs(end['r']-p4-p1) < epsilon:
+                    break
+            else:
+                raise NotImplementedError('Unable to confirm succesful jog.')
+        else:
+            raise NotImplementedError(
+                'Motors could not reach target position in the alloted time.')
 
 
 class Popup(tk.Toplevel):
@@ -371,7 +391,24 @@ class Application(ttk.Frame):
         self.initPopup.destroy()
         self.createWidgets()
 
+        Thread(target=self.robotarm.test, daemon=True).start()
+
     def createWidgets(self):
+        # Menubar
+        menubar = tk.Menu(self)
+        fileMenu = tk.Menu(menubar, tearoff=0)
+        toolsMenu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='File', menu=fileMenu)
+        menubar.add_cascade(label='Tools', menu=toolsMenu)
+        fileMenu.add_command(label='Load Job')
+        fileMenu.add_command(label='Save Job')
+        toolsMenu.add_command(label='Record Job')
+        toolsMenu.add_command(
+            label='Motors...', command=self.configureMotorsPanel)
+        toolsMenu.add_command(
+            label='Calibration Wizard', command=self.calibrateWizardStep1)
+        root.config(menu=menubar)
+
         # Inside of Self
         r = 0
         self.controlFrame = ttk.Frame(self)
@@ -499,21 +536,6 @@ class Application(ttk.Frame):
 
         r += 1
 
-        # Menubar
-        menubar = tk.Menu(self)
-        fileMenu = tk.Menu(menubar, tearoff=0)
-        toolsMenu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='File', menu=fileMenu)
-        menubar.add_cascade(label='Tools', menu=toolsMenu)
-        fileMenu.add_command(label='Load Job')
-        fileMenu.add_command(label='Save Job')
-        toolsMenu.add_command(label='Record Job')
-        toolsMenu.add_command(
-            label='Motors...', command=self.configureMotorsPanel)
-        toolsMenu.add_command(
-            label='Calibration Wizard', command=self.calibrateWizardStep1)
-        root.config(menu=menubar)
-
     def calibrateWizardStep1(self):
         self.popup = Popup(self)
         self.popup.geometry('400x400')
@@ -553,8 +575,9 @@ Click continue to begin.
                   ).grid(column=c, sticky='W', padx=5, pady=5)
 
         self.robotarm.disableAll()
-        for motor in self.robotarm.motors.values():
-            motor.offset = 0
+        self.robotarm.m2.offset = 0
+        self.robotarm.m3.offset = 0
+        self.robotarm.m4.offset = 0
 
     def calibrateWizardStep2(self):
         self.continueButton['text'] = 'Working...'
@@ -760,6 +783,8 @@ Click continue to begin."""
         ttk.Label(self.contentFrame, text='Click finish to close this window.'
                   ).grid(column=c, sticky='W', padx=5, pady=5)
 
+        self.robotarm.m1.enable()
+
     def wizardFailed(self):
         pass
 
@@ -928,16 +953,22 @@ Click continue to begin."""
             self.jog()
 
     def jog(self):
+        duration = 2
+        timeout = 2
+        epsilon = 0.1
+
         self.jogButton['state'] = 'disabled'
 
         t1, t2 = self.robotarm.cartesianToDualPolar(
             self.targetXVar.get(), self.targetYVar.get())
+        z = self.targetZVar.get()
+        r = self.targetRVar.get()
+        e = self.targetEVar.get()
+
         if self.realtimeVar.get():
-            self.robotarm.jog(t1=t1, t2=t2, z=self.targetZVar.get(
-            ), r=self.targetRVar.get(), e=self.targetEVar.get())
+            self.robotarm.jog(t1=t1, t2=t2, z=z, r=r, e=e)
         else:
-            self.robotarm.smoothMove(2, t1=t1, t2=t2, z=self.targetZVar.get(
-            ), r=self.targetRVar.get(), e=self.targetEVar.get())
+            self.robotarm.smoothMove(duration, t1=t1, t2=t2, z=z, r=r, e=e)
 
         self.jogButton['state'] = 'normal'
 
