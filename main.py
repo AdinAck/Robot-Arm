@@ -46,8 +46,8 @@ class RobotArm:
             for d in comports():
                 if d.description == Motor.deviceName:
                     m = Motor(str(d.device))
-                    if (id := m.id) is not None:
-                        self.motors[id] = m
+                    if (m_id := m.m_id) is not None:
+                        self.motors[m_id] = m
                     else:
                         raise NotImplementedError('Unidentifiable motor.')
                 elif d.description == EndEffector.deviceName:
@@ -57,6 +57,10 @@ class RobotArm:
             self.m2 = self.motors[2]
             self.m3 = self.motors[3]
             self.m4 = self.motors[4]
+
+            self.m1.setVoltageLimit(12)
+            self.m1.setPIDs('vel', .5, 20)
+            self.m1.setPIDs('angle', 10)
 
             self.m2.setVoltageLimit(6)
             self.m2.setPIDs('vel', 2, 20, R=200, F=0.01)
@@ -68,16 +72,6 @@ class RobotArm:
         except KeyError:
             raise NotImplementedError(
                 'A serial connection could not be established with at least one motor.')
-
-    def test(self):
-        sleep(3)
-        with open('test.gcode', 'r') as f:
-            for line in f.readlines():
-                tmp = {command: value for command,
-                       value in readGcodeLine(line)}
-                t1, t2 = self.cartesianToDualPolar(tmp['x'], tmp['y'])
-                self.smoothMove(
-                    2, t1=t1, t2=t2, z=tmp['z'], r=tmp['r'], e=tmp['e'])
 
     def loadMotors(self):
         self.singleEndedHome(self.m1, 45, -2)
@@ -172,7 +166,7 @@ class RobotArm:
             motor.enable()
 
         else:
-            print(f'Motor {motor.id} disconnected.')
+            print(f'Motor {motor.m_id} disconnected.')
 
     @staticmethod
     def singleEndedHome(motor: Motor, centerOffset: float = 0, voltage: float = 3, zeroSpeed: float = 0.1, active: bool = True) -> float:
@@ -192,7 +186,7 @@ class RobotArm:
         zeroSpeed: float
             The threshold speed to determine no movement.
         """
-        print(f'Homing motor {motor.id}')
+        print(f'Homing motor {motor.m_id}')
 
         angle = 0
 
@@ -279,7 +273,7 @@ class RobotArm:
             return self.cartesianToDualPolar(
                 (self.minimumRadius+0.1)*math.cos(a), (self.minimumRadius+0.1)*math.sin(a))
 
-    def jog(self, timeout=1, epsilon=0.02, **kwargs):
+    def jog(self, **kwargs):
         self.m2.move(kwargs['t1'])
         # if (p := self.m2.position) is not None:
         #     self.m4.move(kwargs['r']-p)
@@ -347,30 +341,52 @@ class Popup(tk.Toplevel):
 
 
 class Application(ttk.Frame):
+    def test(self):
+        sleep(3)
+        with open('test.gcode', 'r') as f:
+            for line in f.readlines():
+                for argument, value in readGcodeLine(line):
+                    if argument == 'X':
+                        self.targetXVar.set(value)
+                    elif argument == 'Y':
+                        self.targetYVar.set(value)
+                    elif argument == 'Z':
+                        self.targetZVar.set(value)
+                    elif argument == 'R':
+                        self.targetRVar.set(value)
+                    elif argument == 'E':
+                        self.targetEVar.set(int(value))
+                    elif argument == 'D':
+                        self.moveDurationVar.set(value)
+                self.jog()
+
     def __init__(self, master=None):
         ttk.Frame.__init__(self, master)
         self.pack(fill='both', expand=True)
 
-        root.bind('<Up>', lambda _: self.updateTargets(
-            y=self.targetYVar.get()+0.1))
-        root.bind('<Down>', lambda _: self.updateTargets(
-            y=self.targetYVar.get()-0.1))
-        root.bind('<Left>', lambda _: self.updateTargets(
-            x=self.targetXVar.get()+0.1))
-        root.bind('<Right>', lambda _: self.updateTargets(
-            x=self.targetXVar.get()-0.1))
-        root.bind('w', lambda _: self.updateTargets(
-            z=self.targetZVar.get()+0.1))
-        root.bind('s', lambda _: self.updateTargets(
-            z=self.targetZVar.get()-0.1))
-        root.bind('a', lambda _: self.updateTargets(
-            r=self.targetRVar.get()+0.1))
-        root.bind('d', lambda _: self.updateTargets(
-            r=self.targetRVar.get()-0.1))
-        root.bind('q', lambda _: self.updateTargets(
-            e=self.targetEVar.get()+1))
-        root.bind('e', lambda _: self.updateTargets(
-            e=self.targetEVar.get()-1))
+        # root.bind('<Up>', lambda _: self.updateTargets(
+        #     y=self.targetYVar.get()+0.1))
+        # root.bind('<Down>', lambda _: self.updateTargets(
+        #     y=self.targetYVar.get()-0.1))
+        # root.bind('<Left>', lambda _: self.updateTargets(
+        #     x=self.targetXVar.get()+0.1))
+        # root.bind('<Right>', lambda _: self.updateTargets(
+        #     x=self.targetXVar.get()-0.1))
+        # root.bind('w', lambda _: self.updateTargets(
+        #     z=self.targetZVar.get()+0.1))
+        # root.bind('s', lambda _: self.updateTargets(
+        #     z=self.targetZVar.get()-0.1))
+        # root.bind('a', lambda _: self.updateTargets(
+        #     r=self.targetRVar.get()+0.1))
+        # root.bind('d', lambda _: self.updateTargets(
+        #     r=self.targetRVar.get()-0.1))
+        # root.bind('q', lambda _: self.updateTargets(
+        #     e=self.targetEVar.get()+1))
+        # root.bind('e', lambda _: self.updateTargets(
+        #     e=self.targetEVar.get()-1))
+
+        self.moveDurationVar = tk.DoubleVar()
+        self.moveDurationVar.set(2)
 
         self.initPopup = tk.Toplevel(self)
         self.initPopup.geometry("500x100")
@@ -391,7 +407,7 @@ class Application(ttk.Frame):
         self.initPopup.destroy()
         self.createWidgets()
 
-        Thread(target=self.robotarm.test, daemon=True).start()
+        self.test()
 
     def createWidgets(self):
         # Menubar
@@ -953,8 +969,7 @@ Click continue to begin."""
             self.jog()
 
     def jog(self):
-        duration = 2
-        timeout = 2
+        timeout = 5
         epsilon = 0.1
 
         self.jogButton['state'] = 'disabled'
@@ -968,12 +983,14 @@ Click continue to begin."""
         if self.realtimeVar.get():
             self.robotarm.jog(t1=t1, t2=t2, z=z, r=r, e=e)
         else:
-            self.robotarm.smoothMove(duration, t1=t1, t2=t2, z=z, r=r, e=e)
+            self.robotarm.smoothMove(
+                self.moveDurationVar.get(), timeout=timeout, epsilon=epsilon, t1=t1, t2=t2, z=z, r=r, e=e)
 
         self.jogButton['state'] = 'normal'
 
     def on_close(self):
         self.robotarm.disableAll()
+        self.robotarm.endEffector.move(10)
         root.destroy()
 
 
