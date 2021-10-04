@@ -10,6 +10,7 @@ from hardware.FOCMCInterface import Motor
 from hardware.ServoInterface import Servo as EndEffector
 
 import tkinter as tk
+from tkinter import filedialog as fd
 import tkinter.ttk as ttk
 
 from typing import Optional
@@ -64,7 +65,7 @@ class RobotArm:
 
             self.m2.setVoltageLimit(6)
             self.m2.setPIDs('vel', 2, 20, R=200, F=0.01)
-            self.m2.setPIDs('angle', 30, D=5, R=125, F=0.01)
+            self.m2.setPIDs('angle', 30, D=4, R=125, F=0.01)
 
             self.m3.setVoltageLimit(3)
             self.m3.setPIDs('vel', .6, 20, F=0.01)
@@ -91,9 +92,11 @@ class RobotArm:
         except FileNotFoundError:
             self.app.calibrateWizardStep1()
 
-    def disableAll(self):
+    def motorsEnabled(self, value: bool):
+        f = Motor.enable if value else Motor.disable
         for motor in self.motors.values():
-            motor.disable()
+            f(motor)
+        self.app.motorsEnabledVar.set(value)
 
     @staticmethod
     def autoCalibrate(motor: Motor, voltage: float = 3, speed: float = 1, zeroSpeed: float = 0.1) -> tuple[float, float, float]:
@@ -230,7 +233,7 @@ class RobotArm:
         tuple[float, float]
             The cartesian coordinates of the end effector.
         """
-        return self.l1*math.cos(-t1) + self.l2*math.cos(-t2), self.l1*math.sin(t1) + self.l2*math.sin(t2)
+        return self.l1*math.cos(-t1) + self.l2*math.cos(-t2-t1), self.l1*math.sin(t1) + self.l2*math.sin(t2+t1)
 
     def cartesianToDualPolar(self, x: float, y: float):
         r = (x**2 + y**2)**0.5
@@ -341,25 +344,6 @@ class Popup(tk.Toplevel):
 
 
 class Application(ttk.Frame):
-    def test(self):
-        sleep(3)
-        with open('test.gcode', 'r') as f:
-            for line in f.readlines():
-                for argument, value in readGcodeLine(line):
-                    if argument == 'X':
-                        self.targetXVar.set(value)
-                    elif argument == 'Y':
-                        self.targetYVar.set(value)
-                    elif argument == 'Z':
-                        self.targetZVar.set(value)
-                    elif argument == 'R':
-                        self.targetRVar.set(value)
-                    elif argument == 'E':
-                        self.targetEVar.set(int(value))
-                    elif argument == 'D':
-                        self.moveDurationVar.set(value)
-                self.jog()
-
     def __init__(self, master=None):
         ttk.Frame.__init__(self, master)
         self.pack(fill='both', expand=True)
@@ -387,6 +371,8 @@ class Application(ttk.Frame):
 
         self.moveDurationVar = tk.DoubleVar()
         self.moveDurationVar.set(2)
+        self.motorsEnabledVar = tk.BooleanVar()
+        self.motorsEnabledVar.set(True)
 
         self.initPopup = tk.Toplevel(self)
         self.initPopup.geometry("500x100")
@@ -407,22 +393,26 @@ class Application(ttk.Frame):
         self.initPopup.destroy()
         self.createWidgets()
 
-        self.test()
-
     def createWidgets(self):
         # Menubar
         menubar = tk.Menu(self)
         fileMenu = tk.Menu(menubar, tearoff=0)
         toolsMenu = tk.Menu(menubar, tearoff=0)
+        motorMenu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label='File', menu=fileMenu)
         menubar.add_cascade(label='Tools', menu=toolsMenu)
-        fileMenu.add_command(label='Load Job')
+        fileMenu.add_command(label='Load Job', command=lambda: Thread(
+            target=self.loadJob).start())
         fileMenu.add_command(label='Save Job')
         toolsMenu.add_command(label='Record Job')
-        toolsMenu.add_command(
-            label='Motors...', command=self.configureMotorsPanel)
+        toolsMenu.add_cascade(
+            label='Motors', menu=motorMenu)
         toolsMenu.add_command(
             label='Calibration Wizard', command=self.calibrateWizardStep1)
+        motorMenu.add_checkbutton(
+            label='Enable', variable=self.motorsEnabledVar, command=lambda: self.robotarm.motorsEnabled(self.motorsEnabledVar.get()))
+        motorMenu.add_command(
+            label='Configure...', command=self.configureMotorsPanel)
         root.config(menu=menubar)
 
         # Inside of Self
@@ -439,7 +429,7 @@ class Application(ttk.Frame):
         r += 1
 
         tk.Button(self.controlFrame, text='Emergency Stop', fg='#F00000',
-                  command=self.robotarm.disableAll).grid(row=r, column=c, sticky='W', padx=5, pady=5)
+                  command=lambda: self.robotarm.motorsEnabled(False)).grid(row=r, column=c, sticky='W', padx=5, pady=5)
 
         # Inside of SliderFrame
         r = 0
@@ -541,6 +531,11 @@ class Application(ttk.Frame):
 
         r += 1
 
+        self.handPosVar = tk.BooleanVar()
+        self.handPosToggle = ttk.Checkbutton(
+            sliderFrame, variable=self.handPosVar, text='Hand Position', command=lambda: Thread(target=self.handPositioning, daemon=True).start())
+        self.handPosToggle.grid(row=r, column=0, sticky='W', padx=5, pady=5)
+
         self.realtimeVar = tk.BooleanVar()
         self.realtimeToggle = ttk.Checkbutton(
             sliderFrame, variable=self.realtimeVar, text='Realtime')
@@ -590,7 +585,7 @@ Click continue to begin.
                      """
                   ).grid(column=c, sticky='W', padx=5, pady=5)
 
-        self.robotarm.disableAll()
+        self.robotarm.motorsEnabled(False)
         self.robotarm.m2.offset = 0
         self.robotarm.m3.offset = 0
         self.robotarm.m4.offset = 0
@@ -802,7 +797,31 @@ Click continue to begin."""
         self.robotarm.m1.enable()
 
     def wizardFailed(self):
-        pass
+        raise NotImplementedError("Calibration wizard failed.")
+
+    def handPositioning(self):
+        """
+        Release motors to allow for hand movement.
+        Update motor positions until hand position mode is disabled.
+        Re-enable motors.
+
+        This function is intended to be launched in a thread.
+        """
+        self.robotarm.m2.disable()
+        self.robotarm.m3.disable()
+        self.robotarm.m4.disable()
+
+        while self.handPosVar.get():
+            if (t1 := self.robotarm.m2.position) is not None and (t2 := self.robotarm.m3.position) is not None and (r := self.robotarm.m4.position) is not None:
+                x, y = self.robotarm.polarToCartesian(t1, t2)
+                self.targetXVar.set(round(x, 2))
+                self.targetYVar.set(round(y, 2))
+                self.targetRVar.set(round(r, 2))
+            else:
+                return
+
+        self.robotarm.motorsEnabled(True)
+        self.jog()
 
     def configureMotorsPanel(self):
         popup = Popup(self, 'Motors')
@@ -949,7 +968,49 @@ Click continue to begin."""
         popup.center()
 
     def selectMotor(self, motor):
-        pass
+        raise NotImplementedError(
+            "This should somehow select what motor is being configured by the motor configuration panel.")
+
+    def loadJob(self):
+        fileName = fd.askopenfilename(
+            title='Select Job File',
+            filetypes=[('GCode', '*.gcode')],
+        )
+
+        self.jobPopup = tk.Toplevel(self)
+        self.jobPopup.geometry("500x100")
+        self.jobPopup.protocol("WM_DELETE_WINDOW", lambda: None)
+        ttk.Label(self.jobPopup, text="Running Job").pack(side='top')
+        progress = 0
+        progressVar = tk.IntVar()
+
+        self.realtimeVar.set(False)
+
+        with open(fileName, 'r') as f:
+            lines = f.readlines()
+            progress_bar = ttk.Progressbar(
+                self.jobPopup, variable=progressVar, length=500, maximum=len(lines))
+            progress_bar.pack(fill='x', expand=1,
+                              side='bottom', padx=10, pady=10)
+            for line in lines:
+                for argument, value in readGcodeLine(line):
+                    if argument == 'X':
+                        self.targetXVar.set(value)
+                    elif argument == 'Y':
+                        self.targetYVar.set(value)
+                    elif argument == 'Z':
+                        self.targetZVar.set(value)
+                    elif argument == 'R':
+                        self.targetRVar.set(value)
+                    elif argument == 'E':
+                        self.targetEVar.set(int(value))
+                    elif argument == 'D':
+                        self.moveDurationVar.set(value)
+                self.jog()
+                progress += 1
+                progressVar.set(progress)
+
+        self.jobPopup.destroy()
 
     def updateTargets(self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None, r: Optional[float] = None, e: Optional[int] = None):
         digits = 3
@@ -989,7 +1050,7 @@ Click continue to begin."""
         self.jogButton['state'] = 'normal'
 
     def on_close(self):
-        self.robotarm.disableAll()
+        self.robotarm.motorsEnabled(False)
         self.robotarm.endEffector.move(10)
         root.destroy()
 
