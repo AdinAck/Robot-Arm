@@ -804,6 +804,7 @@ Click continue to begin."""
         Release motors to allow for hand movement.
         Update motor positions until hand position mode is disabled.
         Re-enable motors.
+        Jog.
 
         This function is intended to be launched in a thread.
         """
