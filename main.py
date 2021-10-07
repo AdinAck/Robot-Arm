@@ -70,6 +70,7 @@ class RobotArm:
             self.m3.setVoltageLimit(3)
             self.m3.setPIDs('vel', .6, 20, F=0.01)
             self.m3.setPIDs('angle', 20, D=3, R=100, F=0.01)
+
         except KeyError:
             raise NotImplementedError(
                 'A serial connection could not be established with at least one motor.')
@@ -236,8 +237,14 @@ class RobotArm:
         return self.l1*math.cos(-t1) + self.l2*math.cos(-t2-t1), self.l1*math.sin(t1) + self.l2*math.sin(t2+t1)
 
     def cartesianToDualPolar(self, x: float, y: float):
-        r = (x**2 + y**2)**0.5
+        r = abs(complex(x, y))
         a = math.atan2(y, x)
+
+        if r <= self.minimumRadius:
+            return self.cartesianToDualPolar(
+                (self.minimumRadius+0.1)*math.cos(a), (self.minimumRadius+0.1)*math.sin(a))
+        elif r > self.l1 + self.l2:
+            return a, 0
 
         if y >= 0:
             t1 = a - math.acos(
@@ -270,11 +277,7 @@ class RobotArm:
                 )
             )
 
-        if (x**2 + y**2)**0.5 > self.minimumRadius:
-            return t1, t2
-        else:
-            return self.cartesianToDualPolar(
-                (self.minimumRadius+0.1)*math.cos(a), (self.minimumRadius+0.1)*math.sin(a))
+        return t1, t2
 
     def jog(self, **kwargs):
         self.m2.move(kwargs['t1'])
@@ -316,7 +319,7 @@ class RobotArm:
                 raise NotImplementedError('Unable to confirm succesful jog.')
         else:
             raise NotImplementedError(
-                'Motors could not reach target position in the alloted time.')
+                'Motors did not reach target position in the alloted time.')
 
 
 class Popup(tk.Toplevel):
@@ -817,7 +820,7 @@ Click continue to begin."""
                 x, y = self.robotarm.polarToCartesian(t1, t2)
                 self.targetXVar.set(round(x, 2))
                 self.targetYVar.set(round(y, 2))
-                self.targetRVar.set(round(r, 2))
+                self.targetRVar.set(round(r+t1, 2))
             else:
                 return
 
