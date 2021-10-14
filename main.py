@@ -246,36 +246,19 @@ class RobotArm:
         elif r > self.l1 + self.l2:
             return a, 0
 
+        # This section is adapted by Daniel from the original inverse kinematics math by Adin.
+        # start
+        acos_value = math.acos(
+            (r**2 + self.l1**2 - self.l2**2) / (2*self.l1*r))
+        t2 = math.pi - math.acos((self.l1**2 + self.l2**2 - r**2) /
+                                 (2 * self.l1 * self.l2))
         if y >= 0:
-            t1 = a - math.acos(
-                (
-                    r**2 + self.l1**2 - self.l2 ** 2
-                ) / (
-                    2 * r * self.l1
-                )
-            )
-            t2 = math.pi - math.acos(
-                (
-                    self.l1**2 + self.l2**2 - r**2
-                ) / (
-                    2 * self.l1 * self.l2
-                )
-            )
+            acos_value = -acos_value
         else:
-            t1 = a + math.acos(
-                (
-                    r**2 + self.l1**2 - self.l2 ** 2
-                ) / (
-                    2 * r * self.l1
-                )
-            )
-            t2 = -math.pi + math.acos(
-                (
-                    self.l1**2 + self.l2**2 - r**2
-                ) / (
-                    2 * self.l1 * self.l2
-                )
-            )
+            t2 = -t2
+
+        t1 = a + acos_value
+        # end
 
         return t1, t2
 
