@@ -22,7 +22,6 @@ class EndEffector(ABC):
         """
         The range of values that the end effector can output.
         """
-        pass
 
     @abstractmethod
     def connect(self) -> None:
