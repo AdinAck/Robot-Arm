@@ -4,6 +4,8 @@ import tkinter as tk
 from time import time, sleep
 from typing import Optional, Callable
 
+from warnings import warn
+
 from hardware.FOCMCInterface import Motor
 from hardware.ServoInterface import Servo as EndEffector
 

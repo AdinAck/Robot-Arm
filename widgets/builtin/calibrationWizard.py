@@ -13,11 +13,7 @@ class CalibrationWizard(Widget):
         self.title('Calibration Wizard')
         self.geometry('400x400')
 
-        self.system.motorsEnabled(False)
-        self.system.m2.offset = 0
-        self.system.m3.offset = 0
-        self.system.m4.offset = 0
-
+        self.control._system.motorsEnabled(False)
         self.step1()
 
     def step1(self):
@@ -31,11 +27,11 @@ class CalibrationWizard(Widget):
         buttons = ttk.Frame(self)
         buttons.pack(side='bottom', fill='x')
 
-        self.continueButton = ttk.Button(buttons, text='Continue', command=lambda: Thread(
-            target=self.step2, daemon=True).start())
+        self.continueButton = ttk.Button(
+            buttons, text='Continue', command=self.step2)
         self.continueButton.pack(side='right')
         self.cancelButton = ttk.Button(buttons, text='Cancel',
-                                       command=self.destroy)
+                                       command=self.close)
         self.cancelButton.pack(side='right')
 
         r, c = 1, 1
@@ -57,8 +53,12 @@ Click continue to begin.
         self.continueButton['text'] = 'Working...'
         self.continueButton['state'] = 'disabled'
 
-        low = self.system.singleEndedHome(
-            self.system.m2,
+        self.control._system.m3.offset = 0
+        self.control._system.m2.offset = 0
+        self.control._system.m4.offset = 0
+
+        low = self.control._system.singleEndedHome(
+            self.control._system.m2,
             voltage=-12,
             zeroSpeed=0.1,
             active=False
@@ -92,8 +92,8 @@ Click continue to begin.
         self.continueButton['text'] = 'Working...'
         self.continueButton['state'] = 'disabled'
 
-        high = self.system.singleEndedHome(
-            self.system.m2,
+        high = self.control._system.singleEndedHome(
+            self.control._system.m2,
             voltage=12,
             zeroSpeed=0.1,
             active=False
@@ -125,9 +125,9 @@ Click continue to begin.
         self.continueButton['text'] = 'Working...'
         self.continueButton['state'] = 'disabled'
 
-        motor = self.system.m2
+        motor = self.control._system.m2
 
-        if (p := self.system.m2.position) is not None:
+        if (p := self.control._system.m2.position) is not None:
             motor.offset = center = p
         else:
             self.failed()
@@ -162,7 +162,7 @@ Click continue to begin."""
         self.continueButton['text'] = 'Working...'
         self.continueButton['state'] = 'disabled'
 
-        motor = self.system.m4
+        motor = self.control._system.m4
 
         if (p := motor.position) is not None:
             value = p
@@ -191,7 +191,7 @@ Click continue to begin."""
             child.destroy()
 
         if word == 'center':
-            self.system.m4.offset = value
+            self.control._system.m4.offset = value
             self.step6()
             return
 
@@ -209,7 +209,7 @@ Click continue to begin."""
         self.continueButton['text'] = 'Working...'
         self.continueButton['state'] = 'disabled'
 
-        motor = self.system.m4
+        motor = self.control._system.m4
 
         motor.setControlMode('angle')
         motor.move(0)
@@ -236,11 +236,11 @@ Click continue to begin."""
         self.continueButton['state'] = 'disabled'
 
         with open('config/m3', 'w') as f:
-            for num in self.system.autoCalibrate(self.system.m3, speed=2):
+            for num in self.control._system.autoCalibrate(self.control._system.m3, speed=2):
                 f.write(f'{num}\n')
 
         self.cancelButton.destroy()
-        self.continueButton['command'] = lambda: self.destroy()
+        self.continueButton['command'] = self.close
         self.continueButton['state'] = 'normal'
         self.continueButton['text'] = 'Finish'
 
@@ -257,7 +257,11 @@ Click continue to begin."""
         ttk.Label(self.contentFrame, text='Click finish to close this window.'
                   ).grid(column=c, sticky='W', padx=5, pady=5)
 
-        self.system.m1.enable()
+        self.control._system.m1.enable()
 
     def failed(self):
         raise NotImplementedError('Calibration wizard failed.')
+
+    def close(self):
+        self.control._system.motorsEnabled(True)
+        super().close()
