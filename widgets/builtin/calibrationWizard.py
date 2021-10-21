@@ -1,4 +1,3 @@
-from threading import Thread
 import tkinter.ttk as ttk
 
 from lib.widget import Widget
