@@ -54,7 +54,7 @@ class Trainer(Widget):
 
         with open('log', 'w') as f:
             while (error := _compare(out, (current := (attr() for attr in attrs)))) > 0.1 * throughput:
-                out = self.model.predict(*current)
+                out = self.model.predict(*target, *current)
                 for motor, val in zip(self.control._system.motors.values(), out):
                     motor.move(val)
 
