@@ -2,6 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
+class EndEffectorException(Exception):
+    pass
+
+
 class EndEffector(ABC):
     """
     An abstract class defining the interface with an end effector.
@@ -27,38 +31,48 @@ class EndEffector(ABC):
     def connect(self) -> None:
         """
         Establish connection with device
+
+        Raises
+        ------
+        EndEffectorExcpetion
+            If connection fails
         """
 
     @abstractmethod
     def disconect(self) -> None:
         """
         Disconnect from device
+
+        Raises
+        ------
+        EndEffectorExcpetion
+            If disconnection fails
         """
 
     @abstractmethod
-    def enable(self) -> bool:
+    def enable(self) -> None:
         """
         Enable device
 
-        Returns
-        -------
-        bool
-            Confirmation
+        Raises
+        ------
+        EndEffectorExcpetion
+            If enabling fails
         """
 
     @abstractmethod
-    def disable(self) -> bool:
+    def disable(self) -> None:
         """
         Disable device
 
-        Returns
-        -------
-        bool
-            Confirmation
+        Raises
+        ------
+        EndEffectorExcpetion
+            If disabling fails
         """
 
     @abstractmethod
-    def move(self, target: Any) -> bool:
+    def move(self, target: Any) -> None:
         """
         Set target state
 
@@ -67,8 +81,8 @@ class EndEffector(ABC):
         target: Any
             Target state
 
-        Returns
-        -------
-        bool
-            Confirmation
+        Raises
+        ------
+        EndEffectorExcpetion
+            If setting fails
         """

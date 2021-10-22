@@ -1,5 +1,6 @@
 from threading import Thread
 import tkinter.ttk as ttk
+from hardware.FOCMCInterface import MotorException
 
 from lib.widget import Widget
 
@@ -127,9 +128,10 @@ Click continue to begin.
 
         motor = self.control._system.m2
 
-        if (p := self.control._system.m2.position) is not None:
+        try:
+            p = self.control._system.m2.position
             motor.offset = center = p
-        else:
+        except MotorException:
             self.failed()
             return
 
@@ -164,9 +166,9 @@ Click continue to begin."""
 
         motor = self.control._system.m4
 
-        if (p := motor.position) is not None:
-            value = p
-        else:
+        try:
+            value = motor.position
+        except MotorException:
             self.failed()
             return
 

@@ -1,5 +1,6 @@
 from serial import Serial
-from .EndEffector import EndEffector
+from serial.serialutil import SerialException
+from .EndEffector import EndEffector, EndEffectorException
 
 
 class Servo(EndEffector):
@@ -18,22 +19,29 @@ class Servo(EndEffector):
         return 10, 150
 
     def connect(self) -> None:
-        self.ser.port = self.port
-        self.ser.open()
+        try:
+            self.ser.port = self.port
+            self.ser.open()
+        except SerialException:
+            raise EndEffectorException('Could not connect to end effector.')
 
     def disconect(self) -> None:
-        self.disable()
-        self.ser.close()
+        try:
+            self.disable()
+            self.ser.close()
+        except SerialException:
+            raise EndEffectorException(
+                'Could not disconnect from end effector.')
 
-    def enable(self) -> bool:
-        # No use for this method
-        return True
+    def enable(self) -> None:
+        pass
 
-    def disable(self) -> bool:
-        # No use for this method
-        return True
+    def disable(self) -> None:
+        pass
 
-    def move(self, target: int) -> bool:
-        self.ser.write(
-            f'{min(self.valueRange[1], max(target, self.valueRange[0]))}\n'.encode())
-        return True  # No means of verifying if the move was successful
+    def move(self, target: int) -> None:
+        try:
+            self.ser.write(
+                f'{min(self.valueRange[1], max(target, self.valueRange[0]))}\n'.encode())
+        except SerialException:
+            raise EndEffectorException('Could not move end effector.')

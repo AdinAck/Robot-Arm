@@ -54,23 +54,20 @@ class Control:
     def e(self, value):
         self._parent.targetEVar.set(value)
 
-    def jog(self, *args, **kwargs):
+    def jog(self, *args, duration=None, timeout=None, epsilon=None):
         t1, t2 = self._system.cartesianToDualPolar(self.x, self.y)
         z = self.z
         r = self.r
         e = self.e
 
         if 'smooth' in args:
-            assert 'duration' in kwargs, 'Duration must be specified for smooth move.'
-            duration = kwargs['timeout']
+            assert duration is not None, 'Duration must be specified for smooth move.'
             assert duration > 0, 'Timeout must be greater than 0.'
 
-            assert 'timeout' in kwargs, 'Timeout must be specified for smooth move.'
-            timeout = kwargs['timeout']
+            assert timeout is not None, 'Timeout must be specified for smooth move.'
             assert timeout > 0, 'Timeout must be greater than 0.'
 
-            assert 'epsilon' in kwargs, 'Epsilon must be specified for smooth move.'
-            epsilon = kwargs['epsilon']
+            assert epsilon is not None, 'Epsilon must be specified for smooth move.'
             assert epsilon > 0, 'Epsilon must be greater than 0.'
 
             self._system.smoothMove(

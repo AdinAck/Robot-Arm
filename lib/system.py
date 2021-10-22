@@ -6,8 +6,8 @@ from typing import Optional, Callable
 
 from warnings import warn
 
-from hardware.FOCMCInterface import Motor
-from hardware.ServoInterface import Servo as EndEffector
+from hardware.FOCMCInterface import Motor, MotorException
+from hardware.ServoInterface import Servo as EndEffector, EndEffectorException
 
 from lib.bezier import bezier
 
@@ -37,14 +37,15 @@ class System:
     minimumRadius: float = 10
 
     def __init__(self):
+
         try:
 
             for d in comports():
                 if d.description == Motor.deviceName:
                     m = Motor(str(d.device))
-                    if (m_id := m.m_id) is not None:
-                        self.motors[m_id] = m
-                    else:
+                    try:
+                        self.motors[m.m_id] = m
+                    except MotorException:
                         raise NotImplementedError('Unidentifiable motor.')
                 elif d.description == EndEffector.deviceName:
                     self.endEffector = EndEffector(str(d.device))
@@ -53,6 +54,14 @@ class System:
             self.m2 = self.motors[2]
             self.m3 = self.motors[3]
             self.m4 = self.motors[4]
+
+            # All below should be somehow defined in a file or something
+            self.joints = {
+                't1': self.m2,
+                't2': self.m3,
+                'z':  self.m1,
+                'r':  self.m4,
+            }
 
             self.m1.setVoltageLimit(12)
             self.m1.setPIDs('vel', .5, 20)
@@ -99,42 +108,41 @@ class System:
 
     @staticmethod
     def autoCalibrate(motor: Motor, voltage: float = 3, speed: float = 1, zeroSpeed: float = 0.1) -> tuple[float, float, float]:
-        low, high = 0, 0
+        try:
+            low, high = 0, 0
 
-        motor.setVoltageLimit(voltage)
-        motor.setControlMode('velocity')
-        motor.move(-speed)
-        motor.enable()
+            motor.setVoltageLimit(voltage)
+            motor.setControlMode('velocity')
+            motor.move(-speed)
+            motor.enable()
 
-        sleep(1)
+            sleep(1)
 
-        while (v := motor.velocity) is not None and abs(v) > zeroSpeed:
-            # print(v)
-            sleep(.1)
+            while abs(motor.velocity) > zeroSpeed:
+                sleep(.1)
 
-        motor.move(0)
+            motor.move(0)
 
-        if (p := motor.position) is not None:
-            low = p
+            low = motor.position
 
-        motor.move(speed)
+            motor.move(speed)
 
-        sleep(1)
+            sleep(1)
 
-        while (v := motor.velocity) is not None and abs(v) > zeroSpeed:
-            # print(v)
-            sleep(.1)
+            while abs(motor.velocity) > zeroSpeed:
+                sleep(.1)
 
-        motor.move(0)
+            motor.move(0)
 
-        if (p := motor.position) is not None:
-            high = p
+            high = motor.position
 
-        motor.offset = (low+high)/2
-        motor.setControlMode('angle')
-        motor.move(0)
+            motor.offset = (low+high)/2
+            motor.setControlMode('angle')
+            motor.move(0)
 
-        return low, high, motor.offset
+            return low, high, motor.offset
+        except MotorException:
+            raise NotImplementedError('Failed to calibrate motor.')
 
     @staticmethod
     def absoluteHome(motor: Motor, low: float, high: float, center: float) -> None:
@@ -154,8 +162,8 @@ class System:
             If the given centerOffset is invalid.
         """
 
-        if (p := motor.position) is not None:
-            print(p)
+        try:
+            p = motor.position
             if low <= p <= high:
                 motor.offset = center
             elif p < low:
@@ -167,8 +175,8 @@ class System:
             motor.move(0)
             motor.enable()
 
-        else:
-            print(f'Motor {motor.m_id} disconnected.')
+        except MotorException:
+            raise NotImplementedError('Failed to home motor.')
 
     @staticmethod
     def singleEndedHome(motor: Motor, centerOffset: float = 0, voltage: float = 3, zeroSpeed: float = 0.1, active: bool = True) -> float:
@@ -188,33 +196,33 @@ class System:
         zeroSpeed: float
             The threshold speed to determine no movement.
         """
-        print(f'Homing motor {motor.m_id}')
 
-        angle = 0
+        try:
+            angle = 0
 
-        motor.setControlMode('torque')
-        motor.move(voltage)
-        motor.enable()
+            motor.setControlMode('torque')
+            motor.move(voltage)
+            motor.enable()
 
-        sleep(1)
+            sleep(1)
 
-        while (v := motor.velocity) is not None and abs(v) > zeroSpeed:
-            # print(v)
-            sleep(.1)
+            while abs(motor.velocity) > zeroSpeed:
+                sleep(.1)
 
-        motor.move(0)
+            motor.move(0)
 
-        if (p := motor.position) is not None:
-            angle = p
+            angle = motor.position
 
-        if active:
-            motor.offset = angle
-            motor.setControlMode('angle')
-            motor.move(centerOffset)
-        else:
-            motor.disable()
+            if active:
+                motor.offset = angle
+                motor.setControlMode('angle')
+                motor.move(centerOffset)
+            else:
+                motor.disable()
 
-        return angle
+            return angle
+        except MotorException:
+            raise NotImplementedError('Failed to home motor.')
 
     def polarToCartesian(self, t1: float, t2: float) -> tuple[float, float]:
         """
@@ -260,16 +268,18 @@ class System:
 
         return t1, t2
 
-    def jog(self, **kwargs):
-        self.m2.move(kwargs['t1'])
-        # if (p := self.m2.position) is not None:
-        #     self.m4.move(kwargs['r']-p)
-        self.m4.move(kwargs['r']-kwargs['t1'])
+    def getAllPos(self):
+        return (m.position for m in self.joints.values())
 
-        self.m3.move(kwargs['t2'])
-        self.m1.move(kwargs['z'])
-        if 'e' in kwargs:
-            self.endEffector.move(kwargs['e'])
+    def jog(self, t1, t2, r, z, e=None):
+        self.joints['t1'].move(t1)
+        self.joints['r'].move(r-t1)
+
+        self.joints['t2'].move(t2)
+        self.joints['z'].move(z)
+
+        if e is not None:
+            self.endEffector.move(e)
 
     def smoothMove(self, duration, timeout=1, epsilon=0.1, **end) -> None:
         """
@@ -278,26 +288,27 @@ class System:
         This function is intended to be launched in a thread.
         """
 
-        if (t1 := self.m2.position) is not None and (t2 := self.m3.position) is not None and (z := self.m1.position) is not None and (r := self.m4.position) is not None:
+        try:
+            t1, t2, z, r = self.getAllPos()
+
             start = {'t1': t1, 't2': t2, 'z': z, 'r': r+t1}
-        else:
-            raise NotImplementedError(
-                'Unable to retreive motor positions for smooth move')
 
-        self.jog(**start, e=end['e'])
-        startTime = time()
-        while (t := time() - startTime) < duration:
-            self.jog(**{axis: bezier(0, start[axis], duration/2, start[axis],
-                                     duration/2, end[axis], duration, end[axis], t) for axis in start})
+            self.jog(**start, e=end['e'])
+            startTime = time()
+            while (t := time() - startTime) < duration:
+                self.jog(**{axis: bezier(0, start[axis], duration/2, start[axis],
+                                         duration/2, end[axis], duration, end[axis], t) for axis in start})
 
-        startTime = time()
-        while time() - startTime < timeout:
-            sleep(0.1)
-            if (p1 := self.m2.position) is not None and (p2 := self.m3.position) is not None and (p3 := self.m1.position) is not None and (p4 := self.m4.position) is not None:
+            startTime = time()
+            while time() - startTime < timeout:
+                sleep(0.1)
+                p1, p2, p3, p4 = self.getAllPos()
+
                 if abs(end['t1']-p1) < epsilon and abs(end['t2']-p2) < epsilon and abs(end['z']-p3) < epsilon and abs(end['r']-p4-p1) < epsilon:
                     break
             else:
-                raise NotImplementedError('Unable to confirm succesful jog.')
-        else:
-            raise NotImplementedError(
-                'Motors did not reach target position in the alloted time.')
+                raise NotImplementedError(
+                    'Motors did not reach target position in the alloted time.')
+
+        except MotorException:
+            raise NotImplementedError('Failed to smooth move.')
