@@ -1,6 +1,6 @@
 from serial import Serial
 from serial.serialutil import SerialException
-from EndEffector import EndEffector, EndEffectorException
+from .EndEffector import EndEffector, EndEffectorException
 
 
 class Servo(EndEffector):
