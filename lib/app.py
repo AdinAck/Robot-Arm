@@ -222,13 +222,11 @@ class Application(ttk.Frame):
         self.realtimeVar.set(True)
 
         while self.handPosVar.get():
-            if (t1 := self.system.m2.position) is not None and (t2 := self.system.m3.position) is not None and (r := self.system.m4.position) is not None:
-                x, y = self.system.polarToCartesian(t1, t2)
-                self.targetXVar.set(round(x, 2))
-                self.targetYVar.set(round(y, 2))
-                self.targetRVar.set(round(r+t1, 2))
-            else:
-                return
+            t1, t2, _, r = self.system.getAllPos()
+            x, y = self.system.polarToCartesian(t1, t2)
+            self.targetXVar.set(round(x, 2))
+            self.targetYVar.set(round(y, 2))
+            self.targetRVar.set(round(r+t1, 2))
 
         self.jog()
         self.motorsEnabled(True)
