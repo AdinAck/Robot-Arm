@@ -33,17 +33,19 @@ class Application(ttk.Frame):
 
         # Initialize Up Robot Arm
         self.system = System()
-        Thread(target=self.initSystem, daemon=True).start()
-
+        
         # Initialize first-party widgets
         from widgets.builtin.calibrationWizard import CalibrationWizard
         from widgets.builtin.configureMotors import ConfigureMotors
 
         self.calibrationWizard = CalibrationWizard(self)
         self.configureationPanel = ConfigureMotors(self)
+        
+        Thread(target=self.initSystem, daemon=True).start()
+
 
     def initSystem(self):
-        self.system.loadMotors()
+        self.system.loadMotors(self.calibrationWizard.show)
         self.initPopup.destroy()
         self.createWidgets()
 

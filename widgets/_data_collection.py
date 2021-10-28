@@ -81,8 +81,7 @@ class Trainer(Widget):
 
         self.control._system.motorsEnabled(False)
 
-        self.startButton = tk.Button(self, text='Start')
-        self.startButton.pack()
+        self.canvas = tk.Canvas(self, width=800, height=600, bg='white')
 
         self.attrs: list[Callable] = [
             lambda: self.control._system.m2.position,
@@ -99,12 +98,25 @@ class Trainer(Widget):
 
         self.control._system.motorsEnabled(True)
 
+        self.curr_line1 = self.canvas.create_line(0, 0, 0, 0, fill='blue')
+        self.curr_line2 = self.canvas.create_line(0, 0, 0, 0, fill='blue')
+
         self.run()
     
     
     def run(self):
         self.model = Model(self.trainModel, self.config.neat_config, self.config.checkpoint)
         self.model.train(self.config.generations)
+
+    def updateGraph(self, t1, t2):
+        x0 = 0
+        y0 = 0
+        x1 = self.control._system.l1*cos(t1)
+        y1 = self.control._system.l1*sin(t1)
+        x2 = self.control._system.l2*cos(t1 + t2) + x1
+        y2 = self.control._system.l2*sin(t1 + t2) + y1
+        self.canvas.move(self.curr_line1, x0, y0, x1, y1)
+        self.canvas.move(self.curr_line2, x1, y1, x2, y2)
 
     def runModel(self, net: neat.nn.FeedForwardNetwork):
         for motor in self.control._system.motors.values():

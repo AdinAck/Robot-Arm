@@ -38,16 +38,14 @@ class System:
 
     def __init__(self):
         try:
+            self.endEffector = EndEffector('COM5')
             for d in comports():
                 try:
                     m = Motor(str(d.device))
                     self.motors[m.m_id] = m
                 except:
                     # raise NotImplementedError('Unidentifiable motor.')
-                    try:
-                        self.endEffector = EndEffector(str(d.device))
-                    except:
-                        pass
+                    pass
 
             self.m1 = self.motors[1]
             self.m2 = self.motors[2]
