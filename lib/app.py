@@ -2,7 +2,6 @@ from threading import Thread
 
 from lib.system import System
 from lib.gcode import readGcodeLine
-
 import tkinter as tk
 from tkinter import filedialog as fd
 import tkinter.ttk as ttk
@@ -39,11 +38,9 @@ class Application(ttk.Frame):
         # Initialize first-party widgets
         from widgets.builtin.calibrationWizard import CalibrationWizard
         from widgets.builtin.configureMotors import ConfigureMotors
-        from widgets._data_collection import Trainer
 
         self.calibrationWizard = CalibrationWizard(self)
         self.configureationPanel = ConfigureMotors(self)
-        self._data_collection = Trainer(self)
 
     def initSystem(self):
         self.system.loadMotors()
@@ -52,29 +49,27 @@ class Application(ttk.Frame):
 
     def createWidgets(self):
         # Menubar
-        menubar = tk.Menu(self)
-        fileMenu = tk.Menu(menubar, tearoff=0)
-        toolsMenu = tk.Menu(menubar, tearoff=0)
-        motorMenu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='File', menu=fileMenu)
-        menubar.add_cascade(label='Tools', menu=toolsMenu)
-        fileMenu.add_command(label='Load Job', command=lambda: Thread(
+        self.menubar = tk.Menu(self)
+        self.fileMenu = tk.Menu(self.menubar, tearoff=0)
+        self.toolsMenu = tk.Menu(self.menubar, tearoff=0)
+        self.motorMenu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label='File', menu=self.fileMenu)
+        self.menubar.add_cascade(label='Tools', menu=self.toolsMenu)
+        self.fileMenu.add_command(label='Load Job', command=lambda: Thread(
             target=self.loadJob).start())
-        fileMenu.add_command(label='Save Job')
-        toolsMenu.add_command(label='Record Job')
-        toolsMenu.add_cascade(
-            label='Motors', menu=motorMenu)
-        toolsMenu.add_command(
+        self.fileMenu.add_command(label='Save Job')
+        self.toolsMenu.add_command(label='Record Job')
+        self.toolsMenu.add_cascade(
+            label='Motors', menu=self.motorMenu)
+        self.toolsMenu.add_command(
             label='Calibration Wizard', command=self.calibrationWizard.show)
-        toolsMenu.add_command(
-            label='_trainer', command=self._data_collection.show)
-        motorMenu.add_checkbutton(
+        self.motorMenu.add_checkbutton(
             label='Enable', variable=self.motorsEnabledVar, command=lambda: self.motorsEnabled(self.motorsEnabledVar.get()))
-        motorMenu.add_command(
+        self.motorMenu.add_command(
             label='Configure...', command=self.configureationPanel.show)
-        self.root.config(menu=menubar)
+        self.root.config(menu=self.menubar)
 
-        # Inside of Self
+         # Inside of Self
         r = 0
         self.controlFrame = ttk.Frame(self)
         self.controlFrame.pack(side='left', fill='both', expand=True)
@@ -212,7 +207,6 @@ class Application(ttk.Frame):
         Update motor positions until hand position mode is disabled.
         Re-enable motors.
         Jog.
-
         This function is intended to be launched in a thread.
         """
         self.system.m2.disable()

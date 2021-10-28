@@ -1,3 +1,4 @@
+from re import L
 from time import time
 import pickle
 from random import randint
@@ -5,64 +6,59 @@ from math import cos, sin
 from itertools import chain
 from typing import Callable
 
+from lib.app import Application
 import tkinter as tk
 
 import neat
 import visualize
-
+from lib.utils import *
 from lib.widget import Widget
 
 
-def _compare(a, b):
-    assert len(a) == len(b)
-    return sum(abs(i - j) for i, j in zip(a, b))
-
-
 class Model:
-    def __init__(self, eval):
+    def __init__(self, eval, config, checkpoint=None):
         self.externalEval = eval
+        self.config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                             config)
+                        
+        # Create the population, which is the top-level object for a NEAT run.
+        if checkpoint is not None:
+            self.population = neat.Checkpointer.restore_checkpoint(checkpoint)
+        else:
+            self.population = neat.Population(self.config)
+        # Add a stdout reporter to show progress in the terminal.
+        self.population.add_reporter(neat.StdOutReporter(True))
+        self.stats = neat.StatisticsReporter()
+        self.population.add_reporter(self.stats)
+        self.population.add_reporter(neat.Checkpointer(1))
 
-    def eval_genomes(self, genomes, config):
+
+    def eval_genomes(self, genomes):
         for _, genome in genomes:
-            net = neat.nn.FeedForwardNetwork.create(genome, config)
+            net = neat.nn.FeedForwardNetwork.create(genome, self.config)
             genome.fitness = self.externalEval(net)
 
-    def train(self, config_file) -> neat.nn.FeedForwardNetwork:
-        # Load configuration.
-        config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                             config_file)
+    def train(self, generations=1) -> neat.nn.FeedForwardNetwork:
 
-        # Create the population, which is the top-level object for a NEAT run.
-        p = neat.Population(config)
-
-        # Add a stdout reporter to show progress in the terminal.
-        p.add_reporter(neat.StdOutReporter(True))
-        stats = neat.StatisticsReporter()
-        p.add_reporter(stats)
-        p.add_reporter(neat.Checkpointer(1))
-
-        # Run for up to 300 generations.
-        winner = p.run(self.eval_genomes, 1000)
+        # Run for specified number of generations.
+        winner = self.population.run(self.eval_genomes, generations)
 
         # Display the winning genome.
         print('\nBest genome:\n{!s}'.format(winner))
 
         # Show output of the most fit genome against training data.
         print('\nOutput:')
-        winner_net = neat.nn.FeedForwardNetwork.create(winner, config)
+        winner_net = neat.nn.FeedForwardNetwork.create(winner, self.config)
 
         node_names = {-1: 'M2 pos target', -2: 'M2 vel target', -3: 'M3 pos target', -4: 'M3 vel target', -
                       5: 'M2 pos current', -6: 'M2 vel current', -7: 'M3 pos current', -8: 'M3 vel current', 0: 'M2 Torque', 1: 'M3 Torque'}
-        p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-50')
-        winner = p.run(self.eval_genomes, 1)
+        #p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-50')
+        winner = self.population.run(self.eval_genomes, generations)
 
-        visualize.draw_net(config, winner, node_names=node_names)
-        visualize.plot_stats(stats, ylog=False)
-        visualize.plot_species(stats)
-
-        # p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-4')
-        # p.run(eval_genomes, 10)
+        visualize.draw_net(self.config, winner, node_names=node_names)
+        visualize.plot_stats(self.stats, ylog=False)
+        visualize.plot_species(self.stats)
 
         with open('winner.net', 'wb') as f:
             pickle.dump(winner_net, f)
@@ -76,6 +72,9 @@ class Model:
 class Trainer(Widget):
     model: Model
     target_duration = .1
+    def __init__(self, config):
+        self.config = config
+        super().__init__()
 
     def setup(self):
         self.title("Trainer")
@@ -101,10 +100,11 @@ class Trainer(Widget):
         self.control._system.motorsEnabled(True)
 
         self.run()
-
+    
+    
     def run(self):
-        model = Model(self.trainModel)
-        model.train('config-feedforward')
+        self.model = Model(self.trainModel, self.config.neat_config, self.config.checkpoint)
+        self.model.train(self.config.generations)
 
     def runModel(self, net: neat.nn.FeedForwardNetwork):
         for motor in self.control._system.motors.values():
@@ -112,28 +112,23 @@ class Trainer(Widget):
 
         t1, t2 = self.control._system.cartesianToDualPolar(
             self.control.x, self.control.y)
-
         target: list[float] = [t1, 0, t2, 0]  # [m2p, m2v, m3p, m3v]
-
-        assert len(target) == len(self.attrs)
-
         out: list[float] = [0, 0]  # [m2t, m3t]
 
-        error = 0
-
+        assert len(target) == len(self.attrs)
+        total_error = 0
         time_start = time()
+        n_steps = 0
         while (countdown := self.target_duration - (time() - time_start)) >= 0:
             current = [attr() for attr in self.attrs]
             single_error = sum((t - r)**2 for t, r in zip(target, current))
             out = net.activate([countdown] + list(chain(target, current)))
-            out = [num*2 - 1 for num in out]
-            out[0] *= 3
-            out[1] *= 2
             for motor, val in zip([self.control._system.m2, self.control._system.m3], (round(num, 1) for num in out)):
-                motor.move(val)
-            error += single_error
-
-        return -error  # fitness
+                motor.move(clamp(val, -2, 2))
+            n_steps += 1
+            total_error += single_error
+        assert n_steps > 0, 'Cannot have 0 time steps'
+        return -total_error / n_steps  # fitness
 
     def trainModel(self, *args, **kwargs):
         t = randint(-157, 157)/100
@@ -141,3 +136,15 @@ class Trainer(Widget):
         self.control.x = r*cos(t)
         self.control.y = r*sin(t)
         return self.runModel(*args, **kwargs)
+
+
+class TrainApp(Application):
+    def __init__(self, train_config, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.train_config = train_config
+    
+    def createWidgets(self):
+        super().createWidgets()
+        self._data_collection = Trainer(self.train_config)
+        self.toolsMenu.add_command(
+            label='trainer', command=self._data_collection.show)
