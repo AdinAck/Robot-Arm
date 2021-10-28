@@ -37,18 +37,16 @@ class System:
     minimumRadius: float = 10
 
     def __init__(self):
-
         try:
-
+            self.endEffector = EndEffector('COM7')
             for d in comports():
-                if d.description == Motor.deviceName:
+                try:
                     m = Motor(str(d.device))
-                    try:
-                        self.motors[m.m_id] = m
-                    except MotorException:
-                        raise NotImplementedError('Unidentifiable motor.')
-                elif d.description == EndEffector.deviceName:
-                    self.endEffector = EndEffector(str(d.device))
+                    self.motors[m.m_id] = m
+                except:
+                    # raise NotImplementedError('Unidentifiable motor.')
+                    pass
+        
 
             self.m1 = self.motors[1]
             self.m2 = self.motors[2]

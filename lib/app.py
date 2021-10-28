@@ -11,7 +11,7 @@ from typing import Optional
 
 
 class Application(ttk.Frame):
-    system: System = System()
+    system: System
 
     def __init__(self, master):
         ttk.Frame.__init__(self, master)

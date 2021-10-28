@@ -22,7 +22,8 @@ class Servo(EndEffector):
         try:
             self.ser.port = self.port
             self.ser.open()
-        except SerialException:
+        except SerialException as e:
+            print(e)
             raise EndEffectorException('Could not connect to end effector.')
 
     def disconect(self) -> None:
