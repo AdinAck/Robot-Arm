@@ -225,7 +225,7 @@ class System:
         except MotorException:
             raise NotImplementedError('Failed to home motor.')
 
-    def polarToCartesian(self, t1: float, t2: float) -> tuple[float, float]:
+    def dualPolarToCartesian(self, t1: float, t2: float) -> tuple[float, float]:
         """
         Convert polar coordinates to cartesian.
 
