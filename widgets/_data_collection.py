@@ -1,5 +1,5 @@
 from re import L
-from time import time
+from time import time, sleep
 import pickle
 from random import randint
 from math import cos, sin, sqrt
@@ -172,6 +172,7 @@ class Trainer(Widget):
                     # no applying torque toward out of bounds
                     threshold = 1.5 if i == 0 else 2.2
                     if abs(val) > threshold and val * motor.position > 0:
+                        single_error += 2
                         val = 0
                     val *= 2.5
                     val = clamp(val, -3, 3)
@@ -183,7 +184,7 @@ class Trainer(Widget):
                 self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
                             self.control._system.m3.position, out)
 
-
+                
                 n_steps += 1
                 total_error += single_error
         logging.debug(f'Average error {total_error / n_steps} with {n_steps=}')
