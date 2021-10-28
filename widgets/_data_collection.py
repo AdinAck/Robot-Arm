@@ -81,7 +81,8 @@ class Trainer(Widget):
 
         self.control._system.motorsEnabled(False)
 
-        self.canvas = tk.Canvas(self, width=800, height=600, bg='white')
+        self.canvas = tk.Canvas(self, width=400, height=400, bg='white')
+        self.canvas.pack()
 
         self.attrs: list[Callable] = [
             lambda: self.control._system.m2.position,
@@ -98,8 +99,11 @@ class Trainer(Widget):
 
         self.control._system.motorsEnabled(True)
 
-        self.curr_line1 = self.canvas.create_line(0, 0, 0, 0, fill='blue')
-        self.curr_line2 = self.canvas.create_line(0, 0, 0, 0, fill='blue')
+        self.curr_l1 = self.canvas.create_line(0,0,0,0, fill='black')
+        self.curr_l2 = self.canvas.create_line(0,0,0,0, fill='black')
+
+        self.tar_l1 = self.canvas.create_line(0,0,0,0, fill='blue', dash=(2, 2))
+        self.tar_l2 = self.canvas.create_line(0,0,0,0, fill='blue', dash=(2, 2))
 
         self.run()
     
@@ -108,15 +112,22 @@ class Trainer(Widget):
         self.model = Model(self.trainModel, self.config.neat_config, self.config.checkpoint)
         self.model.train(self.config.generations)
 
-    def updateGraph(self, t1, t2):
-        x0 = 0
-        y0 = 0
-        x1 = self.control._system.l1*cos(t1)
-        y1 = self.control._system.l1*sin(t1)
-        x2 = self.control._system.l2*cos(t1 + t2) + x1
-        y2 = self.control._system.l2*sin(t1 + t2) + y1
-        self.canvas.move(self.curr_line1, x0, y0, x1, y1)
-        self.canvas.move(self.curr_line2, x1, y1, x2, y2)
+    def drawArms(self, line1, line2, t1, t2, torques=None):
+        center = 200
+        scale = 5
+        x0 = center
+        y0 = center
+        x1 = x0 + scale*self.control._system.l1*cos(t1)
+        y1 = y0 + scale*self.control._system.l1*sin(t1)
+        x2 = x1 + scale*self.control._system.l2*cos(t1 + t2)
+        y2 = y1 + scale*self.control._system.l2*sin(t1 + t2)
+        self.canvas.coords(line1, x0, y0, x1, y1)
+        self.canvas.coords(line2, x1, y1, x2, y2)
+
+        if torques is not None:
+            self.canvas.itemconfig(line1, width=2*abs(torques[0])+0.1, fill=('green' if torques[0] > 0 else 'red'))
+            self.canvas.itemconfig(line2, width=2*abs(torques[1])+0.1, fill=('green' if torques[1] > 0 else 'red'))
+
 
     def runModel(self, net: neat.nn.FeedForwardNetwork):
         for motor in self.control._system.motors.values():
@@ -137,6 +148,9 @@ class Trainer(Widget):
             out = net.activate([countdown] + list(chain(target, current)))
             for motor, val in zip([self.control._system.m2, self.control._system.m3], (round(num, 1) for num in out)):
                 motor.move(clamp(val, -2, 2))
+            
+            
+
             n_steps += 1
             total_error += single_error
         assert n_steps > 0, 'Cannot have 0 time steps'
