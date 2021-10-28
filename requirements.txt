@@ -1,3 +1,5 @@
 pyserial
 numpy
-neat
+neat-python
+graphviz
+matplotlib
