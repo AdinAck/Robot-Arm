@@ -33,35 +33,33 @@ class Model:
                              neat.DefaultSpeciesSet, neat.DefaultStagnation,
                              config_file)
 
-        if False:
-            # Create the population, which is the top-level object for a NEAT run.
-            p = neat.Population(config)
+        # Create the population, which is the top-level object for a NEAT run.
+        p = neat.Population(config)
 
-            # Add a stdout reporter to show progress in the terminal.
-            p.add_reporter(neat.StdOutReporter(True))
-            stats = neat.StatisticsReporter()
-            p.add_reporter(stats)
-            p.add_reporter(neat.Checkpointer(1))
+        # Add a stdout reporter to show progress in the terminal.
+        p.add_reporter(neat.StdOutReporter(True))
+        stats = neat.StatisticsReporter()
+        p.add_reporter(stats)
+        p.add_reporter(neat.Checkpointer(1))
 
-            # Run for up to 300 generations.
-            winner = p.run(self.eval_genomes, 1000)
+        # Run for up to 300 generations.
+        winner = p.run(self.eval_genomes, 1000)
 
-            # Display the winning genome.
-            print('\nBest genome:\n{!s}'.format(winner))
+        # Display the winning genome.
+        print('\nBest genome:\n{!s}'.format(winner))
 
-            # Show output of the most fit genome against training data.
-            print('\nOutput:')
-            winner_net = neat.nn.FeedForwardNetwork.create(winner, config)
+        # Show output of the most fit genome against training data.
+        print('\nOutput:')
+        winner_net = neat.nn.FeedForwardNetwork.create(winner, config)
 
-        else:
-            node_names = {-1: 'M2 pos target', -2: 'M2 vel target', -3: 'M3 pos target', -4: 'M3 vel target', -
-                        5: 'M2 pos current', -6: 'M2 vel current', -7: 'M3 pos current', -8: 'M3 vel current', 0: 'M2 Torque', 1: 'M3 Torque'}
-            p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-50')
-            winner = p.run(self.eval_genomes, 1)
+        node_names = {-1: 'M2 pos target', -2: 'M2 vel target', -3: 'M3 pos target', -4: 'M3 vel target', -
+                      5: 'M2 pos current', -6: 'M2 vel current', -7: 'M3 pos current', -8: 'M3 vel current', 0: 'M2 Torque', 1: 'M3 Torque'}
+        p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-50')
+        winner = p.run(self.eval_genomes, 1)
 
         visualize.draw_net(config, winner, node_names=node_names)
-        # visualize.plot_stats(stats, ylog=False)
-        # visualize.plot_species(stats)
+        visualize.plot_stats(stats, ylog=False)
+        visualize.plot_species(stats)
 
         # p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-4')
         # p.run(eval_genomes, 10)
