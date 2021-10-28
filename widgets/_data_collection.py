@@ -149,7 +149,9 @@ class Trainer(Widget):
             for motor, val in zip([self.control._system.m2, self.control._system.m3], (round(num, 1) for num in out)):
                 motor.move(clamp(val, -2, 2))
             
-            
+            self.drawArms(self.tar_l1, self.tar_l2, target[0], target[2])
+            self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
+                          self.control._system.m3.position, out)
 
             n_steps += 1
             total_error += single_error
