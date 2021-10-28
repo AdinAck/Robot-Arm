@@ -12,9 +12,9 @@ from typing import Optional
 class Application(ttk.Frame):
     system: System
 
-    def __init__(self, master):
-        ttk.Frame.__init__(self, master)
-        self.root = master
+    def __init__(self, root):
+        ttk.Frame.__init__(self, root)
+        self.root = root
         self.pack(fill='both', expand=True)
 
         self.moveDurationVar = tk.DoubleVar()

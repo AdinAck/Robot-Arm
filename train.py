@@ -13,7 +13,7 @@ if __name__ == '__main__':
     
     root = tk.Tk()
     root.title('SCARA Motion Control System')
-    app = TrainApp(train_config, root)
+    app = TrainApp(root, train_config)
     root.eval('tk::PlaceWindow . center')
     root.protocol("WM_DELETE_WINDOW", app.on_close)
     app.mainloop()

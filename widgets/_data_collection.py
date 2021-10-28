@@ -34,15 +34,15 @@ class Model:
         self.population.add_reporter(neat.Checkpointer(1))
 
 
-    def eval_genomes(self, genomes):
+    def eval_genomes(self, genomes, config):
         for _, genome in genomes:
-            net = neat.nn.FeedForwardNetwork.create(genome, self.config)
+            net = neat.nn.FeedForwardNetwork.create(genome, config)
             genome.fitness = self.externalEval(net)
 
     def train(self, generations=1) -> neat.nn.FeedForwardNetwork:
 
         # Run for specified number of generations.
-        winner = self.population.run(self.eval_genomes, generations)
+        winner = self.population.run(self.eval_genomes, 1)
 
         # Display the winning genome.
         print('\nBest genome:\n{!s}'.format(winner))
@@ -72,9 +72,9 @@ class Model:
 class Trainer(Widget):
     model: Model
     target_duration = .1
-    def __init__(self, config):
+    def __init__(self, root, config):
         self.config = config
-        super().__init__()
+        super().__init__(root)
 
     def setup(self):
         self.title("Trainer")
@@ -151,12 +151,12 @@ class Trainer(Widget):
 
 
 class TrainApp(Application):
-    def __init__(self, train_config, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, root, train_config):
+        super().__init__(root)
         self.train_config = train_config
     
     def createWidgets(self):
         super().createWidgets()
-        self._data_collection = Trainer(self.train_config)
+        self._data_collection = Trainer(self, self.train_config)
         self.toolsMenu.add_command(
             label='trainer', command=self._data_collection.show)
