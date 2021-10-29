@@ -106,6 +106,6 @@ def calc_losses(batch, net, tgt_net, gamma, device='cpu', double=True):
 def choose_action(advantages, epsilon=0.01):
     # epsilon-greedy
     if np.random.random() < epsilon:
-        return np.random.randint(0, len(advantages))
+        return np.random.randint(0, len(advantages.flatten()))
     else:
-        return advantages.argmax()
+        return advantages.argmax().item()

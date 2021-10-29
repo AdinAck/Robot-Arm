@@ -2,16 +2,14 @@ from re import L
 from time import time, sleep
 import pickle
 from random import randint
-from math import cos, sin, sqrt
+from math import cos, sin
 from itertools import chain
 from typing import Callable
 import torch
-import logging
 
 from lib.app import Application
 import tkinter as tk
 
-import neat
 from lib.mllib.common import *
 from lib.utils import *
 from lib.widget import Widget
@@ -51,35 +49,16 @@ class Trainer(Widget):
 
         self.tar_l1 = self.canvas.create_line(0,0,0,0, fill='blue', dash=(2, 2))
         self.tar_l2 = self.canvas.create_line(0,0,0,0, fill='blue', dash=(2, 2))
-
-        self.run()
+        try:
+            self.run()
+        except:
+            for motor in self.control._system.motors.values():
+                motor.disable()
+            raise False
     
     
     def run(self):
-        self.model = DQN(self.runModel, self.config.neat_config, self.config.checkpoint)
-        self.model.train(self.config.generations)
-        for motor in self.control._system.motors.values():
-            motor.disable()
-
-    def drawArms(self, line1, line2, t1, t2, torques=None):
-        center = 200
-        scale = 5
-        x0 = center
-        y0 = center
-        x1 = x0 + scale*self.control._system.l1*cos(t1)
-        y1 = y0 + scale*self.control._system.l1*sin(t1)
-        x2 = x1 + scale*self.control._system.l2*cos(t1 + t2)
-        y2 = y1 + scale*self.control._system.l2*sin(t1 + t2)
-        self.canvas.coords(line1, x0, y0, x1, y1)
-        self.canvas.coords(line2, x1, y1, x2, y2)
-
-        if torques is not None:
-            self.canvas.itemconfig(line1, width=2*abs(torques[0])+0.1, fill=('green' if torques[0] > 0 else 'red'))
-            self.canvas.itemconfig(line2, width=2*abs(torques[1])+0.1, fill=('green' if torques[1] > 0 else 'red'))
-
-
-    def runModel(self):
-        # logging.getLogger().setLevel(logging.DEBUG)
+        self.model = DQN(4, 2)
         for motor in self.control._system.motors.values():
             motor.move(0)
         
@@ -103,7 +82,7 @@ class Trainer(Widget):
                 continue
             frame_start_time = time()
 
-            if time() - new_position_start_time < params['new_target_time']:
+            if time() - new_position_start_time > params['new_target_time']:
                 t = randint(-157, 157)/100
                 r = randint(10, 30)
                 self.control.x = r*cos(t)
@@ -112,18 +91,20 @@ class Trainer(Widget):
                     self.control.x, self.control.y)
                 target: list[float] = [t1, t2]  # [m2p, m3p]
                 out: list[float] = [0, 0]  # [m2t, m3t]
+                new_position_start_time = time()
 
             last_state = current_state
-            current_state = np.fromiter(attr() for attr in self.attrs)
+            current_state = np.fromiter((attr() for attr in self.attrs), dtype=np.float32)
 
             epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
             action_id = choose_action(net(torch.tensor(current_state, dtype=torch.float32).view(1, -1)), epsilon)
             m2_action, m3_action = divmod(action_id, params['n_choices'])
+            print(m2_action, m3_action)
             def get_torque(action):
                 # First normalize action to [-1, 1]
-                action = (action / (params['n_choices'] - 1) / 2) - 1
+                action = action / (params['n_choices'] - 1) * 2 - 1
                 # Then scale to torque limit
-                return action * params['torque_limit']
+                return round(action * params['torque_limit'], 2)
             self.control._system.m2.move(get_torque(m2_action))
             self.control._system.m3.move(get_torque(m3_action))
 
@@ -135,7 +116,7 @@ class Trainer(Widget):
             step += 1
 
             if last_state is not None:
-                reward = -(sum(abs(t - r) for t, r in zip(target, current_state)))
+                reward = -(sum(abs(t - r) for t, r in zip(target, current_state))) * (1 - params['gamma'])
                 experience = Experience(last_state, action_id, reward, current_state, False)
                 buffer.push(experience)
 
@@ -154,6 +135,26 @@ class Trainer(Widget):
             step += 1
             if step % params['target_update'] == 0:
                 tgt_net = net
+
+    def drawArms(self, line1, line2, t1, t2, torques=None):
+        center = 200
+        scale = 5
+        x0 = center
+        y0 = center
+        x1 = x0 + scale*self.control._system.l1*cos(t1)
+        y1 = y0 + scale*self.control._system.l1*sin(t1)
+        x2 = x1 + scale*self.control._system.l2*cos(t1 + t2)
+        y2 = y1 + scale*self.control._system.l2*sin(t1 + t2)
+        self.canvas.coords(line1, x0, y0, x1, y1)
+        self.canvas.coords(line2, x1, y1, x2, y2)
+
+        if torques is not None:
+            self.canvas.itemconfig(line1, width=2*abs(torques[0])+0.1, fill=('green' if torques[0] > 0 else 'red'))
+            self.canvas.itemconfig(line2, width=2*abs(torques[1])+0.1, fill=('green' if torques[1] > 0 else 'red'))
+
+
+
+        
 
 class TrainApp(Application):
     def __init__(self, root, train_config):
