@@ -89,7 +89,7 @@ def calc_losses(batch, net, tgt_net, gamma, device='cpu', double=True):
     next_states = torch.FloatTensor(next_states).to(device)
     actions = torch.LongTensor(actions).to(device)
     rewards = torch.FloatTensor(rewards).to(device)
-    dones = torch.ByteTensor(dones).to(device)
+    dones = torch.BoolTensor(dones).to(device)
 
     state_action_values = net(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
     if double:
@@ -97,7 +97,7 @@ def calc_losses(batch, net, tgt_net, gamma, device='cpu', double=True):
         next_state_values = tgt_net(next_states).gather(1, next_state_actions.unsqueeze(-1)).squeeze(-1)
     else:
         next_state_values = tgt_net(next_states).max(1)[0]
-    next_state_values[dones] = 0.0
+    next_state_values[dones] = False
 
     expected_state_action_values = next_state_values.detach() * gamma + rewards
 

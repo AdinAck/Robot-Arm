@@ -63,8 +63,8 @@ class Trainer(Widget):
             motor.move(0)
         
         params = {'batch_size': 64, 'gamma': 0.9, 'device': 'cpu', 'double': True, 
-        'lr': 0.01, 'target_update': 1000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 1000,
-        'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 1000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1,
+        'lr': 0.01, 'target_update': 1000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 64,
+        'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 10000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1,
         'new_target_time' : 2.0} # n_choices must be odd
         buffer = PriorityBuffer(params['buffer_size'], params['alpha'])
         
@@ -99,7 +99,6 @@ class Trainer(Widget):
             epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
             action_id = choose_action(net(torch.tensor(current_state, dtype=torch.float32).view(1, -1)), epsilon)
             m2_action, m3_action = divmod(action_id, params['n_choices'])
-            print(m2_action, m3_action)
             def get_torque(action):
                 # First normalize action to [-1, 1]
                 action = action / (params['n_choices'] - 1) * 2 - 1
