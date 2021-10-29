@@ -29,6 +29,11 @@ class Trainer(Widget):
         self.canvas = tk.Canvas(self, width=400, height=400, bg='white')
         self.canvas.pack()
 
+        self.fpsVar = tk.IntVar()
+
+        self.fpsLabel = tk.Label(self, textvariable=self.fpsVar)
+        self.fpsLabel.pack()
+
         self.attrs: list[Callable] = [
             lambda: self.control._system.m2.position,
             lambda: self.control._system.m3.position,
@@ -44,38 +49,50 @@ class Trainer(Widget):
 
         self.control._system.motorsEnabled(True)
 
-        self.curr_l1 = self.canvas.create_line(0,0,0,0, fill='black')
-        self.curr_l2 = self.canvas.create_line(0,0,0,0, fill='black')
+        self.curr_l1 = self.canvas.create_line(0, 0, 0, 0, fill='black')
+        self.curr_l2 = self.canvas.create_line(0, 0, 0, 0, fill='black')
 
-        self.tar_l1 = self.canvas.create_line(0,0,0,0, fill='blue', dash=(2, 2))
-        self.tar_l2 = self.canvas.create_line(0,0,0,0, fill='blue', dash=(2, 2))
+        self.tar_l1 = self.canvas.create_line(
+            0, 0, 0, 0, fill='blue', dash=(2, 2))
+        self.tar_l2 = self.canvas.create_line(
+            0, 0, 0, 0, fill='blue', dash=(2, 2))
         try:
             self.run()
         except Exception as e:
             for motor in self.control._system.motors.values():
                 motor.disable()
             raise e
-    
+
     def run(self):
         self.model = DQN(4, 2)
         for motor in self.control._system.motors.values():
             motor.move(0)
-        
-        params = {'batch_size': 64, 'gamma': 0.9, 'device': 'cpu', 'double': True, 
-        'lr': 0.01, 'target_update': 1000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 64,
-        'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 10000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1,
-        'new_target_time' : 2.0} # n_choices must be odd
+
+        params = {'batch_size': 64, 'gamma': 0.9, 'device': 'cpu', 'double': True,
+                  'lr': 0.01, 'target_update': 1000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 64,
+                  'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 10000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1,
+                  'new_target_time': 2.0}  # n_choices must be odd
+
+        def get_torque(action):
+            # First normalize action to [-1, 1]
+            action = action / (params['n_choices'] - 1) * 2 - 1
+            # Then scale to torque limit
+            return round(action * params['torque_limit'], 2)
+
         buffer = PriorityBuffer(params['buffer_size'], params['alpha'])
-        
+
         net = DQN(4, params['n_choices']**2).to(params['device'])
         tgt_net = net
         optimizer = torch.optim.Adam(net.parameters(), lr=params['lr'])
         step = 0
-        
-        
+
         current_state = None
         frame_start_time = time() - 1000
         new_position_start_time = time() - 1000
+
+        target: list[float] = [0, 0]  # [m2p, m3p]
+        out: list[float] = [0, 0]  # [m2t, m3t]
+
         while True:
             if time() - frame_start_time < params['step_time']:
                 continue
@@ -88,51 +105,56 @@ class Trainer(Widget):
                 self.control.y = r*sin(t)
                 t1, t2 = self.control._system.cartesianToDualPolar(
                     self.control.x, self.control.y)
-                target: list[float] = [t1, t2]  # [m2p, m3p]
-                out: list[float] = [0, 0]  # [m2t, m3t]
+                target = [t1, t2]  # [m2p, m3p]
+                out = [0, 0]  # [m2t, m3t]
                 new_position_start_time = time()
 
             last_state = current_state
-            current_state = np.fromiter((attr() for attr in self.attrs), dtype=np.float32)
+            current_state = np.fromiter(
+                (attr() for attr in self.attrs), dtype=np.float32)
 
-            epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
-            action_id = choose_action(net(torch.tensor(current_state, dtype=torch.float32).view(1, -1)), epsilon)
+            epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (
+                params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
+            action_id = choose_action(
+                net(torch.tensor(current_state, dtype=torch.float32).view(1, -1)), epsilon)
             m2_action, m3_action = divmod(action_id, params['n_choices'])
-            def get_torque(action):
-                # First normalize action to [-1, 1]
-                action = action / (params['n_choices'] - 1) * 2 - 1
-                # Then scale to torque limit
-                return round(action * params['torque_limit'], 2)
             self.control._system.m2.move(get_torque(m2_action))
             self.control._system.m3.move(get_torque(m3_action))
 
-                
             self.drawArms(self.tar_l1, self.tar_l2, target[0], target[1])
             self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
-                        self.control._system.m3.position, out)
+                          self.control._system.m3.position, out)
 
             step += 1
 
             if last_state is not None:
-                reward = -(sum(abs(t - r) for t, r in zip(target, current_state))) * (1 - params['gamma'])
-                experience = Experience(last_state, action_id, reward, current_state, False)
+                reward = -(sum(abs(t - r) for t, r in zip(target,
+                           current_state))) * (1 - params['gamma'])
+                experience = Experience(
+                    last_state, action_id, reward, current_state, False)
                 buffer.push(experience)
 
             # Start training
             if len(buffer) < params['replay_initial']:
                 continue
 
-            batch, batch_indices, batch_weights = buffer.sample(params['batch_size'], beta=params['beta'])
-            batch_weights = torch.from_numpy(batch_weights, device=params['device'])
+            batch, batch_indices, batch_weights = buffer.sample(
+                params['batch_size'], beta=params['beta'])
+            batch_weights = torch.from_numpy(
+                batch_weights, device=params['device'])
             optimizer.zero_grad()
-            losses = calc_losses(batch, net, tgt_net, params['gamma'], params['device'], params['double'])
-            buffer.update_priorities(batch_indices, losses.detach().cpu().numpy())
+            losses = calc_losses(
+                batch, net, tgt_net, params['gamma'], params['device'], params['double'])
+            buffer.update_priorities(
+                batch_indices, losses.detach().cpu().numpy())
 
             torch.sum(losses * batch_weights).backward()
             optimizer.step()
-            step += 1
+
             if step % params['target_update'] == 0:
                 tgt_net = net
+
+            self.fpsVar.set(int(1 / (time() - frame_start_time)))
 
     def drawArms(self, line1, line2, t1, t2, torques=None):
         center = 200
@@ -147,18 +169,17 @@ class Trainer(Widget):
         self.canvas.coords(line2, x1, y1, x2, y2)
 
         if torques is not None:
-            self.canvas.itemconfig(line1, width=2*abs(torques[0])+0.1, fill=('green' if torques[0] > 0 else 'red'))
-            self.canvas.itemconfig(line2, width=2*abs(torques[1])+0.1, fill=('green' if torques[1] > 0 else 'red'))
+            self.canvas.itemconfig(
+                line1, width=2*abs(torques[0])+0.1, fill=('green' if torques[0] > 0 else 'red'))
+            self.canvas.itemconfig(
+                line2, width=2*abs(torques[1])+0.1, fill=('green' if torques[1] > 0 else 'red'))
 
-
-
-        
 
 class TrainApp(Application):
     def __init__(self, root, train_config):
         super().__init__(root)
         self.train_config = train_config
-    
+
     def createWidgets(self):
         super().createWidgets()
         self._data_collection = Trainer(self, self.train_config)
