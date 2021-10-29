@@ -219,7 +219,7 @@ class Application(ttk.Frame):
 
         while self.handPosVar.get():
             t1, t2, _, r = self.system.getAllPos()
-            x, y = self.system.polarToCartesian(t1, t2)
+            x, y = self.system.dualPolarToCartesian(t1, t2)
             self.targetXVar.set(round(x, 2))
             self.targetYVar.set(round(y, 2))
             self.targetRVar.set(round(r+t1, 2))

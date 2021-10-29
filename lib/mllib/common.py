@@ -52,13 +52,13 @@ class DQN(nn.Module):
     def __init__(self, input_shape, n_actions):
         super(DQN, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(input_shape, 128),
+            nn.Linear(input_shape, 32),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(32, 32),
             nn.ReLU(),
         )
-        self.value_head = nn.Linear(128, 1)
-        self.advantage_head = nn.Linear(128, n_actions)
+        self.value_head = nn.Linear(32, 1)
+        self.advantage_head = nn.Linear(32, n_actions)
     
     def forward(self, x):
         x = self.model(x)

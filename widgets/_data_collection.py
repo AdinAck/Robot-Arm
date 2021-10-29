@@ -64,14 +64,13 @@ class Trainer(Widget):
             raise e
 
     def run(self):
-        self.model = DQN(4, 2)
         for motor in self.control._system.motors.values():
             motor.move(0)
 
-        params = {'batch_size': 64, 'gamma': 0.9, 'device': 'cpu', 'double': True,
-                  'lr': 0.01, 'target_update': 1000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 64,
-                  'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 10000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1,
-                  'new_target_time': 2.0}  # n_choices must be odd
+        params = {'batch_size': 64, 'gamma': 0.9, 'device': 'cuda', 'double': True,
+                  'lr': 0.01, 'target_update': 3000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 1000,
+                  'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 30000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1,
+                  'new_target_time': 2.0, 'n_reps':10}  # n_choices must be odd
 
         def get_torque(action):
             # First normalize action to [-1, 1]
@@ -81,7 +80,7 @@ class Trainer(Widget):
 
         buffer = PriorityBuffer(params['buffer_size'], params['alpha'])
 
-        net = DQN(4, params['n_choices']**2).to(params['device'])
+        net = DQN(4, params['n_choices']**2).to(params['device']).to(params['device'])
         tgt_net = net
         optimizer = torch.optim.Adam(net.parameters(), lr=params['lr'])
         step = 0
@@ -95,8 +94,14 @@ class Trainer(Widget):
 
         while True:
             if time() - frame_start_time < params['step_time']:
+                self.drawArms(self.tar_l1, self.tar_l2, target[0], target[1])
+                self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
+                              self.control._system.m3.position, out)
                 continue
+
+            self.fpsVar.set(round(1 / (time() - frame_start_time)))
             frame_start_time = time()
+
 
             if time() - new_position_start_time > params['new_target_time']:
                 t = randint(-157, 157)/100
@@ -116,16 +121,12 @@ class Trainer(Widget):
             epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (
                 params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
             action_id = choose_action(
-                net(torch.tensor(current_state, dtype=torch.float32).view(1, -1)), epsilon)
+                net(torch.tensor(current_state, dtype=torch.float32).view(1, -1).to(params['device'])), epsilon)
             m2_action, m3_action = divmod(action_id, params['n_choices'])
             self.control._system.m2.move(get_torque(m2_action))
             self.control._system.m3.move(get_torque(m3_action))
 
-            self.drawArms(self.tar_l1, self.tar_l2, target[0], target[1])
-            self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
-                          self.control._system.m3.position, out)
-
-            step += 1
+            
 
             if last_state is not None:
                 reward = -(sum(abs(t - r) for t, r in zip(target,
@@ -137,24 +138,26 @@ class Trainer(Widget):
             # Start training
             if len(buffer) < params['replay_initial']:
                 continue
+            for _ in range(params['n_reps']):
+                batch, batch_indices, batch_weights = buffer.sample(
+                    params['batch_size'], beta=params['beta'])
+                
+                batch_weights = torch.from_numpy(batch_weights).to(params['device'])
+                optimizer.zero_grad()
+                losses = calc_losses(
+                    batch, net, tgt_net, params['gamma'], params['device'], params['double'])
+                buffer.update_priorities(
+                    batch_indices, losses.detach().cpu().numpy())
 
-            batch, batch_indices, batch_weights = buffer.sample(
-                params['batch_size'], beta=params['beta'])
-            batch_weights = torch.from_numpy(
-                batch_weights, device=params['device'])
-            optimizer.zero_grad()
-            losses = calc_losses(
-                batch, net, tgt_net, params['gamma'], params['device'], params['double'])
-            buffer.update_priorities(
-                batch_indices, losses.detach().cpu().numpy())
-
-            torch.sum(losses * batch_weights).backward()
-            optimizer.step()
-
+                torch.sum(losses * batch_weights).backward()
+                optimizer.step()
+        
+            step += 1
             if step % params['target_update'] == 0:
+                # save model
+                torch.save(net, 'model.pt')
                 tgt_net = net
 
-            self.fpsVar.set(int(1 / (time() - frame_start_time)))
 
     def drawArms(self, line1, line2, t1, t2, torques=None):
         center = 200
