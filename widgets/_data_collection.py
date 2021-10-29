@@ -97,7 +97,8 @@ class Trainer(Widget):
 
         self.running = True
 
-        Thread(target=self._visual, daemon=True).start()
+        Thread(target=self._visualBase, daemon=True).start()
+        Thread(target=self._visualWeights, daemon=True).start()
 
         while True:
             if time() - frame_start_time < params['step_time']:
@@ -121,9 +122,6 @@ class Trainer(Widget):
             last_state = current_state
             current_state = np.fromiter(
                 (attr() for attr in self.attrs), dtype=np.float32)
-
-
-            
 
             epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (
                 params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
@@ -173,7 +171,7 @@ class Trainer(Widget):
                 torch.save(net, 'model.pt')
                 tgt_net.load_state_dict(net.state_dict())
 
-    def drawArms(self, line1, line2, t1, t2, torques=None):
+    def drawArms(self, line1, line2, t1, t2):
         center = 200
         scale = 5
         x0 = center
@@ -185,18 +183,18 @@ class Trainer(Widget):
         self.canvas.coords(line1, x0, y0, x1, y1)
         self.canvas.coords(line2, x1, y1, x2, y2)
 
-        if torques is not None:
-            self.canvas.itemconfig(
-                line1, width=2*abs(torques[0])+0.1, fill=('green' if torques[0] > 0 else 'red'))
-            self.canvas.itemconfig(
-                line2, width=2*abs(torques[1])+0.1, fill=('green' if torques[1] > 0 else 'red'))
-
-    def _visual(self):
+    def _visualBase(self):
         while self.running:
             self.drawArms(self.tar_l1, self.tar_l2,
                           self._target[0], self._target[1])
             self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
-                          self.control._system.m3.position, self._out)
+                          self.control._system.m3.position)
+
+    def _visualWeights(self):
+        self.canvas.itemconfig(
+            self.curr_l1, width=2*abs(self._out[0])+0.1, fill=('green' if self._out[0] > 0 else 'red'))
+        self.canvas.itemconfig(
+            self.curr_l2, width=2*abs(self._out[1])+0.1, fill=('green' if self._out[1] > 0 else 'red'))
 
 
 class TrainApp(Application):
