@@ -131,7 +131,7 @@ class Trainer(Widget):
                 # no applying torque toward out of bounds
                 threshold = 1.5 if i == 0 else 2.2
                 if abs(val) > threshold and val * motor.position > 0:
-                    val = val / abs(val) # sign
+                    val = -val / abs(val) # sign
                 val = clamp(val, -3, 3)
                 val = round(val, 2)
                 motor.move(val)
