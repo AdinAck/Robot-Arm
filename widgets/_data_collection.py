@@ -153,10 +153,6 @@ class Trainer(Widget):
             if len(buffer) < params['replay_initial']:
                 continue
             for _ in range(params['n_reps']):
-                self.drawArms(self.tar_l1, self.tar_l2,
-                              self._target[0], self._target[1])
-                self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
-                              self.control._system.m3.position, self._out)
                 batch, batch_indices, batch_weights = buffer.sample(
                     params['batch_size'], beta=params['beta'])
 
