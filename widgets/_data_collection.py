@@ -1,3 +1,4 @@
+from threading import Thread
 from re import L
 from time import time
 
@@ -61,6 +62,7 @@ class Trainer(Widget):
         except Exception as e:
             for motor in self.control._system.motors.values():
                 motor.disable()
+            self.running = False
             raise e
 
     def run(self):
@@ -89,21 +91,20 @@ class Trainer(Widget):
         frame_start_time = time() - 1000
         new_position_start_time = time() - 1000
 
-        target: list[float] = [0, 0]  # [m2p, m3p]
-        out: list[float] = [0, 0]  # [m2t, m3t]
+        self._target: list[float] = [0, 0]  # [m2p, m3p]
+        self._out: list[float] = [0, 0]  # [m2t, m3t]
         new_target: bool = False
 
+        self.running = True
+
+        Thread(target=self._visual, daemon=True).start()
+
         while True:
-            
-            self.drawArms(self.tar_l1, self.tar_l2, target[0], target[1])
-            self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
-                            self.control._system.m3.position, out)    
             if time() - frame_start_time < params['step_time']:
                 continue
 
             self.fpsVar.set(round(1 / (time() - frame_start_time), 2))
             frame_start_time = time()
-
 
             if time() - new_position_start_time > params['new_target_time']:
                 t = randint(-157, 157)/100
@@ -112,8 +113,8 @@ class Trainer(Widget):
                 self.control.y = r*sin(t)
                 t1, t2 = self.control._system.cartesianToDualPolar(
                     self.control.x, self.control.y)
-                target = [t1, t2]  # [m2p, m3p]
-                out = [0, 0]  # [m2t, m3t]
+                self._target = [t1, t2]  # [m2p, m3p]
+                self._out = [0, 0]  # [m2t, m3t]
                 new_position_start_time = time()
                 new_target = True
 
@@ -129,19 +130,19 @@ class Trainer(Widget):
             action_id = choose_action(
                 net(torch.tensor(current_state, dtype=torch.float32).view(1, -1).to(params['device'])), epsilon)
             m2_action, m3_action = divmod(action_id, params['n_choices'])
-            for i, (motor, val) in enumerate(zip([self.control._system.m2, self.control._system.m3], 
-                (get_torque(m2_action), get_torque(m3_action)))):
+            for i, (motor, val) in enumerate(zip([self.control._system.m2, self.control._system.m3],
+                                                 (get_torque(m2_action), get_torque(m3_action)))):
                 # no applying torque toward out of bounds
                 threshold = 1.5 if i == 0 else 2.2
                 if abs(val) > threshold and val * motor.position > 0:
-                    val = -val / abs(val) # sign
+                    val = -val / abs(val)  # sign
                 val = clamp(val, -3, 3)
                 val = round(val, 2)
                 motor.move(val)
-                out[i] = val
+                self._out[i] = val
 
             if last_state is not None and not new_target:
-                reward = -(sum(abs(t - r) for t, r in zip(target,
+                reward = -(sum(abs(t - r) for t, r in zip(self._target,
                            current_state))) * (1 - params['gamma'])
                 experience = Experience(
                     last_state, action_id, reward, current_state, False)
@@ -152,13 +153,15 @@ class Trainer(Widget):
             if len(buffer) < params['replay_initial']:
                 continue
             for _ in range(params['n_reps']):
-                self.drawArms(self.tar_l1, self.tar_l2, target[0], target[1])
+                self.drawArms(self.tar_l1, self.tar_l2,
+                              self._target[0], self._target[1])
                 self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
-                            self.control._system.m3.position, out)   
+                              self.control._system.m3.position, self._out)
                 batch, batch_indices, batch_weights = buffer.sample(
                     params['batch_size'], beta=params['beta'])
-                
-                batch_weights = torch.from_numpy(batch_weights).to(params['device'])
+
+                batch_weights = torch.from_numpy(
+                    batch_weights).to(params['device'])
                 optimizer.zero_grad()
                 losses = calc_losses(
                     batch, net, tgt_net, params['gamma'], params['device'], params['double'])
@@ -167,13 +170,12 @@ class Trainer(Widget):
 
                 torch.sum(losses * batch_weights).backward()
                 optimizer.step()
-        
+
             step += 1
             if step % params['target_update'] == 0:
                 # save model
                 torch.save(net, 'model.pt')
                 tgt_net.load_state_dict(net.state_dict())
-
 
     def drawArms(self, line1, line2, t1, t2, torques=None):
         center = 200
@@ -192,6 +194,13 @@ class Trainer(Widget):
                 line1, width=2*abs(torques[0])+0.1, fill=('green' if torques[0] > 0 else 'red'))
             self.canvas.itemconfig(
                 line2, width=2*abs(torques[1])+0.1, fill=('green' if torques[1] > 0 else 'red'))
+
+    def _visual(self):
+        while self.running:
+            self.drawArms(self.tar_l1, self.tar_l2,
+                          self._target[0], self._target[1])
+            self.drawArms(self.curr_l1, self.curr_l2, self.control._system.m2.position,
+                          self.control._system.m3.position, self._out)
 
 
 class TrainApp(Application):
