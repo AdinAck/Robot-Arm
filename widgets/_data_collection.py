@@ -4,7 +4,7 @@ from time import time
 
 from random import randint
 from math import cos, sin
-from itertools import chain
+import tensorflow.summary as tfsummary
 from typing import Callable
 import torch
 
@@ -15,7 +15,20 @@ from lib.mllib.common import *
 from lib.utils import *
 from lib.widget import Widget
 
-
+class Averager:
+    def __init__(self):
+        self.reset()
+    
+    def add(self, val):
+        self.total += val
+        self.count += 1
+    
+    def get(self):
+        return self.total / self.count
+    
+    def reset(self):
+        self.total = 0
+        self.count = 0
 class Trainer(Widget):
     def __init__(self, root, config):
 
@@ -31,7 +44,6 @@ class Trainer(Widget):
         self.canvas.pack()
 
         self.fpsVar = tk.IntVar()
-
         self.fpsLabel = tk.Label(self, textvariable=self.fpsVar)
         self.fpsLabel.pack()
 
@@ -66,13 +78,20 @@ class Trainer(Widget):
             raise e
 
     def run(self):
+        def get_logdir():
+            import os
+            root_logdir = os.path.join(os.curdir, 'runs')
+            logdir = time.strftime("run_%Y_%m_%d-%H_%M_%S")
+            logdir = os.path.join(root_logdir, logdir)
+            return logdir
+        writer = tfsummary.create_file_writer(get_logdir())
         for motor in self.control._system.motors.values():
             motor.move(0)
 
         params = {'batch_size': 64, 'gamma': 0.85, 'device': 'cuda', 'double': True,
                   'lr': 0.01, 'target_update': 3000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 1000,
-                  'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 60000, 'torque_limit': 3.0, 'n_choices': 5, 'step_time': .1,
-                  'new_target_time': 3.0, 'n_reps': 2}  # n_choices must be odd
+                  'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 60000, 'torque_limit': 3.0, 'n_choices': 3, 'step_time': .1,
+                  'new_target_time': 3.0, 'n_reps': 2, 'report_every': 100}  # n_choices must be odd
 
         def get_torque(action):
             # First normalize action to [-1, 1]
@@ -85,6 +104,7 @@ class Trainer(Widget):
         net = DQN(4, params['n_choices']**2).to(params['device'])
         tgt_net = DQN(4, params['n_choices']**2).to(params['device'])
         optimizer = torch.optim.Adam(net.parameters(), lr=params['lr'])
+        error_avg = Averager()
         step = 0
 
         current_state = None
@@ -118,6 +138,10 @@ class Trainer(Widget):
                 self._out = [0, 0]  # [m2t, m3t]
                 new_position_start_time = time()
                 new_target = True
+                if step > 0:
+                    with writer.as_default():
+                        tfsummary.scalar('error', error_avg.get(), step)
+                    error_avg.reset()
 
             last_state = current_state
             current_state = np.fromiter(
@@ -125,9 +149,11 @@ class Trainer(Widget):
 
             epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (
                 params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
+            
             action_id = choose_action(
                 net(torch.tensor(current_state, dtype=torch.float32).view(1, -1).to(params['device'])), epsilon)
             m2_action, m3_action = divmod(action_id, params['n_choices'])
+            
             for i, (motor, val) in enumerate(zip([self.control._system.m2, self.control._system.m3],
                                                  (get_torque(m2_action), get_torque(m3_action)))):
                 # no applying torque toward out of bounds
@@ -140,16 +166,18 @@ class Trainer(Widget):
                 self._out[i] = val
 
             if last_state is not None and not new_target:
-                reward = -(sum(abs(t - r) for t, r in zip(self._target,
-                           current_state))) * (1 - params['gamma'])
+                error = sum(abs(t - r) for t, r in zip(self._target,
+                           current_state)) * (1 - params['gamma'])
+                error_avg.add(error)
                 experience = Experience(
-                    last_state, action_id, reward, current_state, False)
+                    last_state, action_id, -error, current_state, False)
                 buffer.push(experience)
             new_target = False
 
             # Start training
             if len(buffer) < params['replay_initial']:
                 continue
+            loss_avg = Averager()
             for _ in range(params['n_reps']):
                 batch, batch_indices, batch_weights = buffer.sample(
                     params['batch_size'], beta=params['beta'])
@@ -159,13 +187,20 @@ class Trainer(Widget):
                 optimizer.zero_grad()
                 losses = calc_losses(
                     batch, net, tgt_net, params['gamma'], params['device'], params['double'])
+                loss_avg.add(losses.mean().item())    
                 buffer.update_priorities(
                     batch_indices, losses.detach().cpu().numpy())
-
                 torch.sum(losses * batch_weights).backward()
                 optimizer.step()
 
             step += 1
+
+            if step % params['report_every'] == 0:
+                with writer.as_default():
+                    tfsummary.scalar('loss', loss_avg.get(), step)
+                loss_avg.reset()
+
+
             if step % params['target_update'] == 0:
                 # save model
                 torch.save(net, 'model.pt')
@@ -196,6 +231,8 @@ class Trainer(Widget):
         self.canvas.itemconfig(
             self.curr_l2, width=2*abs(self._out[1])+0.1, fill=('green' if self._out[1] > 0 else 'red'))
 
+
+    
 
 class TrainApp(Application):
     def __init__(self, root, train_config):
