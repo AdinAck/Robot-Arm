@@ -85,7 +85,8 @@ class Trainer(Widget):
         
         params = {'batch_size': 64, 'gamma': 0.9, 'device': 'cpu', 'double': True, 
         'lr': 0.01, 'target_update': 1000, 'buffer_size': 10000, 'alpha': 0.6, 'beta': 0.4, 'replay_initial': 1000,
-        'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 1000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1} # n_choices must be odd
+        'epsilon_start': 1.0, 'epsilon_final': 0.01, 'epsilon_steps': 1000, 'torque_limit': 3.0, 'n_choices': 21, 'step_time': .1,
+        'new_target_time' : 2.0} # n_choices must be odd
         buffer = PriorityBuffer(params['buffer_size'], params['alpha'])
         
         net = DQN(4, params['n_choices']**2)
@@ -93,20 +94,25 @@ class Trainer(Widget):
         optimizer = torch.optim.Adam(net.parameters(), lr=params['lr'])
         step = 0
         
-        t = randint(-157, 157)/100
-        r = randint(10, 30)
-        self.control.x = r*cos(t)
-        self.control.y = r*sin(t)
-        t1, t2 = self.control._system.cartesianToDualPolar(
-            self.control.x, self.control.y)
-        target: list[float] = [t1, t2]  # [m2p, m3p]
-        out: list[float] = [0, 0]  # [m2t, m3t]
+        
         current_state = None
-        start_time = -100
+        frame_start_time = time() - 1000
+        new_position_start_time = time() - 1000
         while True:
-            if time() - start_time < params['step_time']:
+            if time() - frame_start_time < params['step_time']:
                 continue
-            start_time = time()
+            frame_start_time = time()
+
+            if time() - new_position_start_time < params['new_target_time']:
+                t = randint(-157, 157)/100
+                r = randint(10, 30)
+                self.control.x = r*cos(t)
+                self.control.y = r*sin(t)
+                t1, t2 = self.control._system.cartesianToDualPolar(
+                    self.control.x, self.control.y)
+                target: list[float] = [t1, t2]  # [m2p, m3p]
+                out: list[float] = [0, 0]  # [m2t, m3t]
+
             last_state = current_state
             current_state = np.fromiter(attr() for attr in self.attrs)
 
