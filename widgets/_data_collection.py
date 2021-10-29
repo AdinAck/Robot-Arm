@@ -121,6 +121,9 @@ class Trainer(Widget):
             current_state = np.fromiter(
                 (attr() for attr in self.attrs), dtype=np.float32)
 
+
+            
+
             epsilon = max(params['epsilon_final'], params['epsilon_start'] - step * (
                 params['epsilon_start'] - params['epsilon_final']) / params['epsilon_steps'])
             action_id = choose_action(
