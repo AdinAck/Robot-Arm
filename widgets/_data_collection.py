@@ -51,11 +51,10 @@ class Trainer(Widget):
         self.tar_l2 = self.canvas.create_line(0,0,0,0, fill='blue', dash=(2, 2))
         try:
             self.run()
-        except:
+        except Exception as e:
             for motor in self.control._system.motors.values():
                 motor.disable()
-            raise False
-    
+            raise e
     
     def run(self):
         self.model = DQN(4, 2)
@@ -68,7 +67,7 @@ class Trainer(Widget):
         'new_target_time' : 2.0} # n_choices must be odd
         buffer = PriorityBuffer(params['buffer_size'], params['alpha'])
         
-        net = DQN(4, params['n_choices']**2)
+        net = DQN(4, params['n_choices']**2).to(params['device'])
         tgt_net = net
         optimizer = torch.optim.Adam(net.parameters(), lr=params['lr'])
         step = 0
@@ -124,7 +123,7 @@ class Trainer(Widget):
                 continue
 
             batch, batch_indices, batch_weights = buffer.sample(params['batch_size'], beta=params['beta'])
-            batch_weights = torch.Tensor(batch_weights, device=params['device'])
+            batch_weights = torch.from_numpy(batch_weights, device=params['device'])
             optimizer.zero_grad()
             losses = calc_losses(batch, net, tgt_net, params['gamma'], params['device'], params['double'])
             buffer.update_priorities(batch_indices, losses.detach().cpu().numpy())
