@@ -39,9 +39,11 @@ class Application(ttk.Frame):
         # Initialize first-party widgets
         from widgets.builtin.calibrationWizard import CalibrationWizard
         from widgets.builtin.configureMotors import ConfigureMotors
+        from widgets.builtin.visual import Visual
 
         self.calibrationWizard = CalibrationWizard(self)
         self.configureationPanel = ConfigureMotors(self)
+        self.visual = Visual(self)
 
     def initSystem(self):
         self.system.loadMotors()
@@ -64,6 +66,8 @@ class Application(ttk.Frame):
             label='Motors', menu=motorMenu)
         toolsMenu.add_command(
             label='Calibration Wizard', command=self.calibrationWizard.show)
+        toolsMenu.add_command(
+            label='Visual', command=self.visual.show)
         motorMenu.add_checkbutton(
             label='Enable', variable=self.motorsEnabledVar, command=lambda: self.motorsEnabled(self.motorsEnabledVar.get()))
         motorMenu.add_command(
