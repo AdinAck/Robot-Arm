@@ -67,17 +67,17 @@ class System:
             self.m1.setPIDs('vel', .5, 20)
             self.m1.setPIDs('angle', 10)
 
-            self.m2.setVoltageLimit(12)
-            self.m2.setVelocityLimit(2)
+            self.m2.setVoltageLimit(6)
+            self.m2.setVelocityLimit(8)
             self.m2.setPIDs('vel', 2, 20, R=200, F=0.01)
             self.m2.setPIDs('angle', 30, D=4, R=125, F=0.01)
 
-            self.m3.setVoltageLimit(12)
-            self.m3.setVelocityLimit(4)
+            self.m3.setVoltageLimit(3)
+            self.m3.setVelocityLimit(8)
             self.m3.setPIDs('vel', .6, 20, F=0.01)
             self.m3.setPIDs('angle', 20, D=3, R=100, F=0.01)
 
-            self.m4.setVelocityLimit(1)
+            self.m4.setVelocityLimit(8)
 
         except KeyError:
             raise NotImplementedError(

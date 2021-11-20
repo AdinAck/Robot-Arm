@@ -228,9 +228,9 @@ class Application(ttk.Frame):
             self.targetYVar.set(round(y, 2))
             self.targetRVar.set(round(r+t1, 2))
 
-        self.jog()
-        self.motorsEnabled(True)
         self.realtimeVar.set(False)
+        self.motorsEnabled(True)
+        self.jog()
 
     def loadJob(self):
         fileName = fd.askopenfilename(

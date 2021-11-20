@@ -1,3 +1,6 @@
+from threading import Thread
+from time import sleep
+
 import tkinter as tk
 import tkinter.ttk as ttk
 
@@ -5,6 +8,8 @@ from lib.widget import Widget
 
 
 class ConfigureMotors(Widget):
+    selectedMotor: int = 1
+
     def setup(self):
         self.title('Configure Motors')
         topFrame = ttk.Frame(self)
@@ -45,7 +50,7 @@ class ConfigureMotors(Widget):
         # motorSelect = ttk.OptionMenu(
         #     topFrame, s, f'Motor {list(self.system.motors.keys())[0]}', *[f'Motor {id}' for id in self.system.motors])
         motorSelect = ttk.OptionMenu(
-            topFrame, s, 'Motor 1', 'Motor 1', 'Motor 2', 'Motor 3', 'Motor 4', command=self.selectMotor)
+            topFrame, s, 'Motor 1', 'Motor 1', 'Motor 2', 'Motor 3', 'Motor 4', command=self._selectMotor)
         motorSelect.pack(side='left')
         ttk.Label(topFrame, text='❌').pack(side='left')
 
@@ -145,6 +150,10 @@ class ConfigureMotors(Widget):
 
         # PIDs
 
-    def selectMotor(self, motor):
-        raise NotImplementedError(
-            "This should somehow select what motor is being configured by the motor configuration panel.")
+        Thread(target=self._loop, daemon=True).start()
+
+    def _selectMotor(self, motor_id):
+        self.selectedMotor = motor_id
+
+    def _loop(self):
+        pass
