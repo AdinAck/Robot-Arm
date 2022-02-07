@@ -60,18 +60,19 @@ class Control:
         r = self.r
         e = self.e
 
-        if 'smooth' in args:
-            assert duration is not None, 'Duration must be specified for smooth move.'
-            assert duration > 0, 'Timeout must be greater than 0.'
+        if "smooth" in args:
+            assert duration is not None, "Duration must be specified for smooth move."
+            assert duration > 0, "Timeout must be greater than 0."
 
-            assert timeout is not None, 'Timeout must be specified for smooth move.'
-            assert timeout > 0, 'Timeout must be greater than 0.'
+            assert timeout is not None, "Timeout must be specified for smooth move."
+            assert timeout > 0, "Timeout must be greater than 0."
 
-            assert epsilon is not None, 'Epsilon must be specified for smooth move.'
-            assert epsilon > 0, 'Epsilon must be greater than 0.'
+            assert epsilon is not None, "Epsilon must be specified for smooth move."
+            assert epsilon > 0, "Epsilon must be greater than 0."
 
             self._system.smoothMove(
-                duration, timeout, epsilon, t1=t1, t2=t2, z=z, r=r, e=e)
+                duration, timeout, epsilon, t1=t1, t2=t2, z=z, r=r, e=e
+            )
         else:
             self._system.jog(t1=t1, t2=t2, z=z, r=r, e=e)
 

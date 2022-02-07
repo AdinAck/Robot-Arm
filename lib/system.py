@@ -37,73 +37,76 @@ class System:
     minimumRadius: float = 10
 
     def __init__(self):
+        for d in comports():
+            if d.description == Motor.deviceName:
+                m = Motor(str(d.device))
+                try:
+                    self.motors[m.m_id] = m
+                except MotorException:
+                    raise NotImplementedError("Unidentifiable motor.")
+            elif d.description == EndEffector.deviceName:
+                self.endEffector = EndEffector(str(d.device))
+
+        print(f"")
 
         try:
-
-            for d in comports():
-                if d.description == Motor.deviceName:
-                    m = Motor(str(d.device))
-                    try:
-                        self.motors[m.m_id] = m
-                    except MotorException:
-                        raise NotImplementedError('Unidentifiable motor.')
-                elif d.description == EndEffector.deviceName:
-                    self.endEffector = EndEffector(str(d.device))
-
-            self.m1 = self.motors[1]
-            self.m2 = self.motors[2]
-            self.m3 = self.motors[3]
-            self.m4 = self.motors[4]
-
-            # All below should be somehow defined in a file or something
-            self.joints = {
-                't1': self.m2,
-                't2': self.m3,
-                'z':  self.m1,
-                'r':  self.m4,
-            }
-
-            self.m1.setVoltageLimit(12)
-            self.m1.setPIDs('vel', .5, 20)
-            self.m1.setPIDs('angle', 10)
-
-            self.m2.setVoltageLimit(6)
-            self.m2.setVelocityLimit(8)
-            self.m2.setPIDs('vel', 2, 20, R=200, F=0.01)
-            self.m2.setPIDs('angle', 30, D=4, R=125, F=0.01)
-
-            self.m3.setVoltageLimit(3)
-            self.m3.setVelocityLimit(8)
-            self.m3.setPIDs('vel', .6, 20, F=0.01)
-            self.m3.setPIDs('angle', 20, D=3, R=100, F=0.01)
-
-            self.m4.setVelocityLimit(8)
-
+            self.m_vertical = self.motors[1]
+            self.m_inner_rot = self.motors[2]
+            self.m_outer_rot = self.motors[3]
+            self.m_end_rot = self.motors[4]
         except KeyError:
             raise NotImplementedError(
-                'A serial connection could not be established with at least one motor.')
+                "A serial connection could not be established with at least one motor. "
+                + f"Detected motor(s): {[key for key in self.motors]}"
+            )
+
+        # All below should be somehow defined in a file or something
+        self.joints = {
+            "t1": self.m_inner_rot,
+            "t2": self.m_outer_rot,
+            "z": self.m_vertical,
+            "r": self.m_end_rot,
+        }
+
+        self.m_vertical.setVoltageLimit(12)
+        self.m_vertical.setPIDs("vel", 0.5, 20)
+        self.m_vertical.setPIDs("angle", 10)
+
+        self.m_inner_rot.setVoltageLimit(12)
+        self.m_inner_rot.setVelocityLimit(8)
+        self.m_inner_rot.setPIDs("vel", 2, 20, R=200, F=0.01)
+        self.m_inner_rot.setPIDs("angle", 30, D=4, R=125, F=0.01)
+
+        self.m_outer_rot.setVoltageLimit(12)
+        self.m_outer_rot.setVelocityLimit(8)
+        self.m_outer_rot.setPIDs("vel", 0.6, 20, F=0.01)
+        self.m_outer_rot.setPIDs("angle", 20, D=3, R=100, F=0.01)
+
+        self.m_end_rot.setVelocityLimit(8)
 
     def loadMotors(self, onFail: Optional[Callable] = None):
-        self.singleEndedHome(self.m1, 45, -2)
+        self.singleEndedHome(self.m_vertical, 45, -4)
 
         try:
-            with open('config/m2', 'r') as f:
-                self.absoluteHome(self.m2, *(float(f.readline().strip())
-                                             for _ in range(3)))
+            with open("config/m2", "r") as f:
+                self.absoluteHome(
+                    self.m_inner_rot, *(float(f.readline().strip()) for _ in range(3))
+                )
 
-            with open('config/m3', 'r') as f:
-                self.absoluteHome(self.m3, *(float(f.readline().strip())
-                                             for _ in range(3)))
+            with open("config/m3", "r") as f:
+                self.absoluteHome(
+                    self.m_outer_rot, *(float(f.readline().strip()) for _ in range(3))
+                )
 
-            with open('config/m4', 'r') as f:
-                self.absoluteHome(self.m4, *(float(f.readline().strip())
-                                             for _ in range(3)))
+            with open("config/m4", "r") as f:
+                self.absoluteHome(
+                    self.m_end_rot, *(float(f.readline().strip()) for _ in range(3))
+                )
         except (FileNotFoundError, ValueError):
             if onFail is not None:
                 onFail()
             else:
-                raise NotImplementedError(
-                    "Failed to load motor config from disk.")
+                raise NotImplementedError("Failed to load motor config from disk.")
 
     def motorsEnabled(self, value: bool):
         f = Motor.enable if value else Motor.disable
@@ -111,19 +114,21 @@ class System:
             f(motor)
 
     @staticmethod
-    def autoCalibrate(motor: Motor, voltage: float = 3, speed: float = 1, zeroSpeed: float = 0.1) -> tuple[float, float, float]:
+    def autoCalibrate(
+        motor: Motor, voltage: float = 3, speed: float = 1, zeroSpeed: float = 0.1
+    ) -> tuple[float, float, float]:
         try:
             low, high = 0, 0
 
             motor.setVoltageLimit(voltage)
-            motor.setControlMode('velocity')
+            motor.setControlMode("velocity")
             motor.move(-speed)
             motor.enable()
 
             sleep(1)
 
             while abs(motor.velocity) > zeroSpeed:
-                sleep(.1)
+                sleep(0.1)
 
             motor.move(0)
 
@@ -134,19 +139,19 @@ class System:
             sleep(1)
 
             while abs(motor.velocity) > zeroSpeed:
-                sleep(.1)
+                sleep(0.1)
 
             motor.move(0)
 
             high = motor.position
 
-            motor.offset = (low+high)/2
-            motor.setControlMode('angle')
+            motor.offset = (low + high) / 2
+            motor.setControlMode("angle")
             motor.move(0)
 
             return low, high, motor.offset
         except MotorException:
-            raise NotImplementedError('Failed to calibrate motor.')
+            raise NotImplementedError("Failed to calibrate motor.")
 
     @staticmethod
     def absoluteHome(motor: Motor, low: float, high: float, center: float) -> None:
@@ -171,19 +176,25 @@ class System:
             if low <= p <= high:
                 motor.offset = center
             elif p < low:
-                motor.offset = center - 2*math.pi
+                motor.offset = center - 2 * math.pi
             else:
-                motor.offset = center + 2*math.pi
+                motor.offset = center + 2 * math.pi
 
-            motor.setControlMode('angle')
+            motor.setControlMode("angle")
             motor.move(0)
             motor.enable()
 
         except MotorException:
-            raise NotImplementedError('Failed to home motor.')
+            raise NotImplementedError("Failed to home motor.")
 
     @staticmethod
-    def singleEndedHome(motor: Motor, centerOffset: float = 0, voltage: float = 3, zeroSpeed: float = 0.1, active: bool = True) -> float:
+    def singleEndedHome(
+        motor: Motor,
+        centerOffset: float = 0,
+        voltage: float = 3,
+        zeroSpeed: float = 0.1,
+        active: bool = True,
+    ) -> float:
         """
         Determine the position of a motor with multi-rotation movement using one extreme.
 
@@ -204,14 +215,14 @@ class System:
         try:
             angle = 0
 
-            motor.setControlMode('torque')
+            motor.setControlMode("torque")
             motor.move(voltage)
             motor.enable()
 
             sleep(1)
 
             while abs(motor.velocity) > zeroSpeed:
-                sleep(.1)
+                sleep(0.1)
 
             motor.move(0)
 
@@ -219,14 +230,14 @@ class System:
 
             if active:
                 motor.offset = angle
-                motor.setControlMode('angle')
+                motor.setControlMode("angle")
                 motor.move(centerOffset)
             else:
                 motor.disable()
 
             return angle
         except MotorException:
-            raise NotImplementedError('Failed to home motor.')
+            raise NotImplementedError("Failed to home motor.")
 
     def polarToCartesian(self, t1: float, t2: float) -> tuple[float, float]:
         """
@@ -244,7 +255,9 @@ class System:
         tuple[float, float]
             The cartesian coordinates of the end effector.
         """
-        return self.l1*math.cos(-t1) + self.l2*math.cos(-t2-t1), self.l1*math.sin(t1) + self.l2*math.sin(t2+t1)
+        return self.l1 * math.cos(-t1) + self.l2 * math.cos(
+            -t2 - t1
+        ), self.l1 * math.sin(t1) + self.l2 * math.sin(t2 + t1)
 
     def cartesianToDualPolar(self, x: float, y: float):
         r = abs(complex(x, y))
@@ -252,16 +265,20 @@ class System:
 
         if r <= self.minimumRadius:
             return self.cartesianToDualPolar(
-                (self.minimumRadius+0.1)*math.cos(a), (self.minimumRadius+0.1)*math.sin(a))
+                (self.minimumRadius + 0.1) * math.cos(a),
+                (self.minimumRadius + 0.1) * math.sin(a),
+            )
         elif r > self.l1 + self.l2:
             return a, 0
 
         # This section is adapted by Daniel from the original inverse kinematics math by Adin.
         # start
         acos_value = math.acos(
-            (r**2 + self.l1**2 - self.l2**2) / (2*self.l1*r))
-        t2 = math.pi - math.acos((self.l1**2 + self.l2**2 - r**2) /
-                                 (2 * self.l1 * self.l2))
+            (r ** 2 + self.l1 ** 2 - self.l2 ** 2) / (2 * self.l1 * r)
+        )
+        t2 = math.pi - math.acos(
+            (self.l1 ** 2 + self.l2 ** 2 - r ** 2) / (2 * self.l1 * self.l2)
+        )
         if y >= 0:
             acos_value = -acos_value
         else:
@@ -276,11 +293,11 @@ class System:
         return (m.position for m in self.joints.values())
 
     def jog(self, t1, t2, r, z, e=None):
-        self.joints['t1'].move(t1)
-        self.joints['r'].move(r-t1)
+        self.joints["t1"].move(t1)
+        self.joints["r"].move(r - t1)
 
-        self.joints['t2'].move(t2)
-        self.joints['z'].move(z)
+        self.joints["t2"].move(t2)
+        self.joints["z"].move(z)
 
         if e is not None:
             self.endEffector.move(e)
@@ -295,24 +312,44 @@ class System:
         try:
             t1, t2, z, r = self.getAllPos()
 
-            start = {'t1': t1, 't2': t2, 'z': z, 'r': r+t1}
+            start = {"t1": t1, "t2": t2, "z": z, "r": r + t1}
 
-            self.jog(**start, e=end['e'])
+            self.jog(**start, e=end["e"])
             startTime = time()
             while (t := time() - startTime) < duration:
-                self.jog(**{axis: bezier(0, start[axis], duration/2, start[axis],
-                                         duration/2, end[axis], duration, end[axis], t) for axis in start})
+                self.jog(
+                    **{
+                        axis: bezier(
+                            0,
+                            start[axis],
+                            duration / 2,
+                            start[axis],
+                            duration / 2,
+                            end[axis],
+                            duration,
+                            end[axis],
+                            t,
+                        )
+                        for axis in start
+                    }
+                )
 
             startTime = time()
             while time() - startTime < timeout:
                 sleep(0.1)
                 p1, p2, p3, p4 = self.getAllPos()
 
-                if abs(end['t1']-p1) < epsilon and abs(end['t2']-p2) < epsilon and abs(end['z']-p3) < epsilon and abs(end['r']-p4-p1) < epsilon:
+                if (
+                    abs(end["t1"] - p1) < epsilon
+                    and abs(end["t2"] - p2) < epsilon
+                    and abs(end["z"] - p3) < epsilon
+                    and abs(end["r"] - p4 - p1) < epsilon
+                ):
                     break
             else:
                 raise NotImplementedError(
-                    'Motors did not reach target position in the alloted time.')
+                    "Motors did not reach target position in the allotted time."
+                )
 
         except MotorException:
-            raise NotImplementedError('Failed to smooth move.')
+            raise NotImplementedError("Failed to smooth move.")
