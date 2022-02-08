@@ -22,7 +22,7 @@ class EndEffector(ABC):
 
     @property
     @abstractmethod
-    def valueRange(self) -> tuple[Any, Any]:
+    def value_range(self) -> tuple[Any, Any]:
         """
         The range of values that the end effector can output.
         """

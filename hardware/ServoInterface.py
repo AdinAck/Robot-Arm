@@ -15,7 +15,7 @@ class Servo(EndEffector):
         self.connect()
 
     @property
-    def valueRange(self) -> tuple[int, int]:
+    def value_range(self) -> tuple[int, int]:
         return 10, 150
 
     def connect(self) -> None:
@@ -42,6 +42,6 @@ class Servo(EndEffector):
     def move(self, target: int) -> None:
         try:
             self.ser.write(
-                f'{min(self.valueRange[1], max(target, self.valueRange[0]))}\n'.encode())
+                f'{min(self.value_range[1], max(target, self.value_range[0]))}\n'.encode())
         except SerialException:
             raise EndEffectorException('Could not move end effector.')

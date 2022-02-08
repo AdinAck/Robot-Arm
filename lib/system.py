@@ -1,10 +1,7 @@
 import math
 from serial.tools.list_ports import comports
-import tkinter as tk
 from time import time, sleep
 from typing import Optional, Callable
-
-from warnings import warn
 
 from hardware.FOCMCInterface import Motor, MotorException
 from hardware.ServoInterface import Servo as EndEffector
@@ -20,13 +17,13 @@ class System:
     ----------
     motors: dict[int, Motor]
         A dictionary of all the motor objects in the system.
-    m1: Motor
+    m_vertical: Motor
         Motor 1, the vertical translation motor.
-    m2: Motor
+    m_inner_rot: Motor
         Motor 2, the first rotation motor (theta1).
-    m3: Motor
+    m_outer_rot: Motor
         Motor 3, the second rotation motor (theta2).
-    m4: Motor
+    m_end_rot: Motor
         Motor 4, the end effector motor.
     """
 
@@ -37,17 +34,22 @@ class System:
     minimumRadius: float = 10
 
     def __init__(self):
+        """
+        Initialize System object.
+
+        Connect to all devices and configure motors.
+        """
         for d in comports():
             if d.description == Motor.deviceName:
+                # attach motors
                 m = Motor(str(d.device))
                 try:
                     self.motors[m.m_id] = m
                 except MotorException:
-                    raise NotImplementedError("Unidentifiable motor.")
+                    raise NotImplementedError('Unidentifiable motor.')
             elif d.description == EndEffector.deviceName:
+                # attach end effector
                 self.endEffector = EndEffector(str(d.device))
-
-        print(f"")
 
         try:
             self.m_vertical = self.motors[1]
@@ -56,59 +58,83 @@ class System:
             self.m_end_rot = self.motors[4]
         except KeyError:
             raise NotImplementedError(
-                "A serial connection could not be established with at least one motor. "
-                + f"Detected motor(s): {[key for key in self.motors]}"
+                'A serial connection could not be established with at least one motor. '
+                + f'Detected motor(s): {[key for key in self.motors]}'
             )
 
         # All below should be somehow defined in a file or something
+        # maybe defer to loadMotors?
         self.joints = {
-            "t1": self.m_inner_rot,
-            "t2": self.m_outer_rot,
-            "z": self.m_vertical,
-            "r": self.m_end_rot,
+            't1': self.m_inner_rot,
+            't2': self.m_outer_rot,
+            'z': self.m_vertical,
+            'r': self.m_end_rot,
         }
 
-        self.m_vertical.setVoltageLimit(12)
-        self.m_vertical.setPIDs("vel", 0.5, 20)
-        self.m_vertical.setPIDs("angle", 10)
+        self.m_vertical.set_voltage_limit(12)
+        self.m_vertical.set_PIDs('vel', 0.5, 20)
+        self.m_vertical.set_PIDs('angle', 10)
 
-        self.m_inner_rot.setVoltageLimit(12)
-        self.m_inner_rot.setVelocityLimit(8)
-        self.m_inner_rot.setPIDs("vel", 2, 20, R=200, F=0.01)
-        self.m_inner_rot.setPIDs("angle", 30, D=4, R=125, F=0.01)
+        self.m_inner_rot.set_voltage_limit(12)
+        # self.m_inner_rot.setVelocityLimit(8)
+        self.m_inner_rot.set_PIDs('vel', 2, 20, R=200, F=0.01)
+        self.m_inner_rot.set_PIDs('angle', 30, D=4, R=125, F=0.01)
 
-        self.m_outer_rot.setVoltageLimit(12)
-        self.m_outer_rot.setVelocityLimit(8)
-        self.m_outer_rot.setPIDs("vel", 0.6, 20, F=0.01)
-        self.m_outer_rot.setPIDs("angle", 20, D=3, R=100, F=0.01)
+        self.m_outer_rot.set_voltage_limit(12)
+        # self.m_outer_rot.setVelocityLimit(8)
+        self.m_outer_rot.set_PIDs('vel', 0.6, 20, F=0.01)
+        self.m_outer_rot.set_PIDs('angle', 20, D=3, R=100, F=0.01)
 
-        self.m_end_rot.setVelocityLimit(8)
+        self.m_end_rot.set_voltage_limit(12)
+        # self.m_end_rot.setVelocityLimit(8)
 
     def loadMotors(self, onFail: Optional[Callable] = None):
+        """
+        Load motor calibration from disk.
+
+        *This function will cause movement.
+
+        Parameters
+        ----------
+        onFail: Optional[Callable]
+            Callback for if files are not found or corrupted.
+        """
         self.singleEndedHome(self.m_vertical, 45, -4)
 
         try:
-            with open("config/m2", "r") as f:
+            with open('config/inner_rot', 'r') as f:
                 self.absoluteHome(
-                    self.m_inner_rot, *(float(f.readline().strip()) for _ in range(3))
+                    self.m_inner_rot, *(float(f.readline().strip())
+                                        for _ in range(3))
                 )
 
-            with open("config/m3", "r") as f:
+            with open('config/outer_rot', 'r') as f:
                 self.absoluteHome(
-                    self.m_outer_rot, *(float(f.readline().strip()) for _ in range(3))
+                    self.m_outer_rot, *(float(f.readline().strip())
+                                        for _ in range(3))
                 )
 
-            with open("config/m4", "r") as f:
+            with open('config/end_rot', 'r') as f:
                 self.absoluteHome(
-                    self.m_end_rot, *(float(f.readline().strip()) for _ in range(3))
+                    self.m_end_rot, *(float(f.readline().strip())
+                                      for _ in range(3))
                 )
         except (FileNotFoundError, ValueError):
             if onFail is not None:
                 onFail()
             else:
-                raise NotImplementedError("Failed to load motor config from disk.")
+                raise NotImplementedError(
+                    'Failed to load motor config from disk.')
 
     def motorsEnabled(self, value: bool):
+        """
+        Helper function to enable or disable all motors.
+
+        Parameters
+        ----------
+        value: bool
+            Whether to enable or disable all motors.
+        """
         f = Motor.enable if value else Motor.disable
         for motor in self.motors.values():
             f(motor)
@@ -117,11 +143,31 @@ class System:
     def autoCalibrate(
         motor: Motor, voltage: float = 3, speed: float = 1, zeroSpeed: float = 0.1
     ) -> tuple[float, float, float]:
+        """
+        For motors with limited range of motion, move the motor back and forth
+        to detect the bounds and interpolate the center position.
+
+        Parameters
+        ----------
+        motor: Motor
+            The motor to calibrate.
+        voltage: float
+            The voltage to use for calibration.
+        speed: float
+            The speed to use for calibration.
+        zeroSpeed: float
+            The threshold speed to be considered zero.
+
+        Returns
+        -------
+        tuple[float, float, float]
+            The minimum, maximum, and center position of the motor.
+        """
         try:
             low, high = 0, 0
 
-            motor.setVoltageLimit(voltage)
-            motor.setControlMode("velocity")
+            motor.set_voltage_limit(voltage)
+            motor.set_control_mode('velocity')
             motor.move(-speed)
             motor.enable()
 
@@ -146,12 +192,12 @@ class System:
             high = motor.position
 
             motor.offset = (low + high) / 2
-            motor.setControlMode("angle")
+            motor.set_control_mode('angle')
             motor.move(0)
 
             return low, high, motor.offset
         except MotorException:
-            raise NotImplementedError("Failed to calibrate motor.")
+            raise NotImplementedError('Failed to calibrate motor.')
 
     @staticmethod
     def absoluteHome(motor: Motor, low: float, high: float, center: float) -> None:
@@ -170,7 +216,6 @@ class System:
         AssertionError
             If the given centerOffset is invalid.
         """
-
         try:
             p = motor.position
             if low <= p <= high:
@@ -180,12 +225,12 @@ class System:
             else:
                 motor.offset = center + 2 * math.pi
 
-            motor.setControlMode("angle")
+            motor.set_control_mode('angle')
             motor.move(0)
             motor.enable()
 
         except MotorException:
-            raise NotImplementedError("Failed to home motor.")
+            raise NotImplementedError('Failed to home motor.')
 
     @staticmethod
     def singleEndedHome(
@@ -215,7 +260,7 @@ class System:
         try:
             angle = 0
 
-            motor.setControlMode("torque")
+            motor.set_control_mode('torque')
             motor.move(voltage)
             motor.enable()
 
@@ -230,14 +275,14 @@ class System:
 
             if active:
                 motor.offset = angle
-                motor.setControlMode("angle")
+                motor.set_control_mode('angle')
                 motor.move(centerOffset)
             else:
                 motor.disable()
 
             return angle
         except MotorException:
-            raise NotImplementedError("Failed to home motor.")
+            raise NotImplementedError('Failed to home motor.')
 
     def polarToCartesian(self, t1: float, t2: float) -> tuple[float, float]:
         """
@@ -260,6 +305,23 @@ class System:
         ), self.l1 * math.sin(t1) + self.l2 * math.sin(t2 + t1)
 
     def cartesianToDualPolar(self, x: float, y: float):
+        """
+        Convert cartesian coordinates to cascaded polar coordinates.
+
+        (x, y) -> (t1, t2)
+
+        Parameters
+        ----------
+        x: float
+            The x-coordinate of the end effector.
+        y: float
+            The y-coordinate of the end effector.
+
+        Returns
+        -------
+        tuple[float, float]
+            The angle of the first motor and the angle of the second motor.
+        """
         r = abs(complex(x, y))
         a = math.atan2(y, x)
 
@@ -290,31 +352,71 @@ class System:
         return t1, t2
 
     def getAllPos(self):
+        """
+        Retrieve all motor positions.
+
+        Returns
+        -------
+        Generator[float]
+            A generator of all motor positions.
+        """
         return (m.position for m in self.joints.values())
 
-    def jog(self, t1, t2, r, z, e=None):
-        self.joints["t1"].move(t1)
-        self.joints["r"].move(r - t1)
+    def jog(self, t1: float, t2: float, r: float, z: float, e: Optional[int] = None):
+        """
+        Instruct the motors to move to the given position.
+        This directly calls the Motor.move method, so no
+        inverse kinematics are performed.
 
-        self.joints["t2"].move(t2)
-        self.joints["z"].move(z)
+        The orientation of the end effector is relative
+        to the world, not to the joint.
+
+        Parameters
+        ----------
+        t1: float
+            The angle of the first motor.
+        t2: float
+            The angle of the second motor.
+        r: float
+            The angle of the end effector.
+        z: float (WIP)
+            The position of the vertical motor.
+            (rad right now, should be cm)
+        e: Optional[int]
+            Arbitrary value given to the installed end effector.
+        """
+        self.joints['t1'].move(t1)
+        self.joints['r'].move(r - t1)
+
+        self.joints['t2'].move(t2)
+        self.joints['z'].move(z)
 
         if e is not None:
             self.endEffector.move(e)
 
-    def smoothMove(self, duration, timeout=1, epsilon=0.1, **end) -> None:
+    def smoothMove(self, duration: float, timeout: float = 1, epsilon: float = 0.1, **target) -> None:
         """
         Smoothly move the motors to a target position.
 
         This function is intended to be launched in a thread.
-        """
 
+        Parameters
+        ----------
+        duration: Optional[float]
+            The duration of the movement.
+        timeout: Optional[float]
+            The amount of time allotted to the move before a timeout exception is raised.
+        epsilon: Optional[float]
+            The amount of error allowed before the move is considered complete.
+        **target: float
+            The target position of the motors.
+        """
         try:
             t1, t2, z, r = self.getAllPos()
 
-            start = {"t1": t1, "t2": t2, "z": z, "r": r + t1}
+            start = {'t1': t1, 't2': t2, 'z': z, 'r': r + t1}
 
-            self.jog(**start, e=end["e"])
+            self.jog(**start, e=target['e'])
             startTime = time()
             while (t := time() - startTime) < duration:
                 self.jog(
@@ -325,9 +427,9 @@ class System:
                             duration / 2,
                             start[axis],
                             duration / 2,
-                            end[axis],
+                            target[axis],
                             duration,
-                            end[axis],
+                            target[axis],
                             t,
                         )
                         for axis in start
@@ -340,16 +442,16 @@ class System:
                 p1, p2, p3, p4 = self.getAllPos()
 
                 if (
-                    abs(end["t1"] - p1) < epsilon
-                    and abs(end["t2"] - p2) < epsilon
-                    and abs(end["z"] - p3) < epsilon
-                    and abs(end["r"] - p4 - p1) < epsilon
+                    abs(target['t1'] - p1) < epsilon
+                    and abs(target['t2'] - p2) < epsilon
+                    and abs(target['z'] - p3) < epsilon
+                    and abs(target['r'] - p4 - p1) < epsilon
                 ):
                     break
             else:
                 raise NotImplementedError(
-                    "Motors did not reach target position in the allotted time."
+                    'Motors did not reach target position in the allotted time.'
                 )
 
         except MotorException:
-            raise NotImplementedError("Failed to smooth move.")
+            raise NotImplementedError('Failed to smooth move.')

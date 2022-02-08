@@ -10,14 +10,16 @@ class Visual(Widget):
     running = True
 
     def setup(self):
-        self.canvas = tk.Canvas(self, width=400, height=400, bg="white")
+        self.canvas = tk.Canvas(self, width=400, height=400, bg='white')
         self.canvas.pack()
 
-        self.curr_l1 = self.canvas.create_line(0, 0, 0, 0, fill="black")
-        self.curr_l2 = self.canvas.create_line(0, 0, 0, 0, fill="black")
+        self.curr_l1 = self.canvas.create_line(0, 0, 0, 0, fill='black')
+        self.curr_l2 = self.canvas.create_line(0, 0, 0, 0, fill='black')
 
-        self.tar_l1 = self.canvas.create_line(0, 0, 0, 0, fill="blue", dash=(2, 2))
-        self.tar_l2 = self.canvas.create_line(0, 0, 0, 0, fill="blue", dash=(2, 2))
+        self.tar_l1 = self.canvas.create_line(
+            0, 0, 0, 0, fill='blue', dash=(2, 2))
+        self.tar_l2 = self.canvas.create_line(
+            0, 0, 0, 0, fill='blue', dash=(2, 2))
 
         Thread(target=self.loop, daemon=True).start()
 
@@ -34,8 +36,10 @@ class Visual(Widget):
                 self.control._system.m_inner_rot.position,
                 self.control._system.m_outer_rot.position,
                 (
-                    self.control._system.m_inner_rot._sendCommand("MMG1", float),
-                    self.control._system.m_outer_rot._sendCommand("MMG1", float),
+                    self.control._system.m_inner_rot._send_command(
+                        'MMG1', float),
+                    self.control._system.m_outer_rot._send_command(
+                        'MMG1', float),
                 ),
             )
 
@@ -55,12 +59,12 @@ class Visual(Widget):
             self.canvas.itemconfig(
                 line1,
                 width=2 * abs(torques[0]) + 0.1,
-                fill=("green" if torques[0] > 0 else "red"),
+                fill=('green' if torques[0] > 0 else 'red'),
             )
             self.canvas.itemconfig(
                 line2,
                 width=2 * abs(torques[1]) + 0.1,
-                fill=("green" if torques[1] > 0 else "red"),
+                fill=('green' if torques[1] > 0 else 'red'),
             )
 
     def close(self):

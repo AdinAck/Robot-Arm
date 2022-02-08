@@ -40,6 +40,10 @@ class Motor:
 
     def __init__(self, port: str) -> None:
         """
+        Initialize Motor object.
+
+        *Serial port assertation occurs in connect()
+
         Parameters
         ----------
         port: str
@@ -51,7 +55,7 @@ class Motor:
 
         self.connect()
 
-    def _sendCommand(self, cmd: str, returnType: type) -> Any:
+    def _send_command(self, cmd: str, returnType: type) -> Any:
         """
         Send a command to the motor
         *Intended for internal use only*
@@ -78,7 +82,7 @@ class Motor:
                 return returnType(r)
             except ValueError:
                 raise MotorException(
-                    f'Received data could not be parsed as {returnType}. COM may be out of sync.\nCommand: {cmd}\nResponse" {r}'
+                    f'Received data could not be parsed as {returnType}. COM may be out of sync.\nCommand: {cmd}\nResponse: {r}'
                 )
 
     def connect(self) -> None:
@@ -88,10 +92,10 @@ class Motor:
         self.ser.port = self.port
         self.ser.open()
         try:
-            self.m_id = self._sendCommand('I', int)
+            self.m_id = self._send_command('I', int)
         except SerialException:
             raise NotImplementedError(
-                "Failed to initialize motor: SerialException.")
+                'Failed to initialize motor: SerialException.')
 
     def disconnect(self) -> None:
         """
@@ -113,7 +117,7 @@ class Motor:
         return self.ser.is_open
 
     @property
-    def COMPrecision(self) -> int:
+    def COM_precision(self) -> int:
         """
         Get COM decimal precision
 
@@ -122,7 +126,7 @@ class Motor:
         int
             Current COM precision
         """
-        return self._sendCommand('#', int)
+        return self._send_command('#', int)
 
     @property
     def enabled(self) -> bool:
@@ -134,7 +138,7 @@ class Motor:
         bool
             True if enabled, False if disabled
         """
-        return self._sendCommand('ME', bool)
+        return self._send_command('ME', bool)
 
     @property
     def position(self) -> float:
@@ -146,7 +150,7 @@ class Motor:
         float
             Current position
         """
-        return self._sendCommand('MMG6', float) - self.offset
+        return self._send_command('MMG6', float) - self.offset
 
     @property
     def velocity(self) -> float:
@@ -158,9 +162,9 @@ class Motor:
         float
             Current velocity
         """
-        return self._sendCommand('MMG5', float)
+        return self._send_command('MMG5', float)
 
-    def setCOMPrecision(self, decimals: int) -> None:
+    def set_COM_precision(self, decimals: int) -> None:
         """
         Set number of decimals in COM output
 
@@ -175,9 +179,9 @@ class Motor:
         """
         assert 1 <= decimals <= 15, 'Decimal precision must be within the range [1,15].'
 
-        if self._sendCommand(f'#{decimals}', float) != decimals:
+        if self._send_command(f'#{decimals}', float) != decimals:
             raise MotorException(
-                "Failed to set COM precision: Mismatched confirmation message.")
+                'Failed to set COM precision: Mismatched confirmation message.')
 
     def enable(self) -> None:
         """
@@ -187,9 +191,9 @@ class Motor:
         ------
         MotorException
         """
-        if self._sendCommand('ME1', int) != 1:
+        if self._send_command('ME1', int) != 1:
             raise MotorException(
-                "Failed to enable motor: Mismatched confirmation message.")
+                'Failed to enable motor: Mismatched confirmation message.')
 
     def disable(self) -> None:
         """
@@ -199,11 +203,11 @@ class Motor:
         ------
         MotorException
         """
-        if self._sendCommand('ME0', int) != 0:
+        if self._send_command('ME0', int) != 0:
             raise MotorException(
-                "Failed to disable motor: Mismatched confirmation message.")
+                'Failed to disable motor: Mismatched confirmation message.')
 
-    def setPIDs(self, stage: Literal['vel', 'angle'], *args: float, **kwargs: float) -> None:
+    def set_PIDs(self, stage: Literal['vel', 'angle'], *args: float, **kwargs: float) -> None:
         """
         Set PID values for angle and velocity control
 
@@ -232,14 +236,14 @@ class Motor:
 
         for char, arg in chain(zip(['P', 'I', 'D', 'R', 'L', 'F'], args), kwargs.items()):
             if (
-                self._sendCommand(
+                self._send_command(
                     f'M{PIDType}{char}{arg}', float
                 ) != arg
             ):
                 raise MotorException(
-                    f"Failed to set PIDs: Mismatched confirmation message.")
+                    f'Failed to set PIDs: Mismatched confirmation message.')
 
-    def setCurrentLimit(self, limit: float) -> None:
+    def set_current_limit(self, limit: float) -> None:
         """
         Set motor current limit
 
@@ -252,11 +256,11 @@ class Motor:
         ------
         MotorException
         """
-        if self._sendCommand(f'MLC{limit}', float) != limit:
+        if self._send_command(f'MLC{limit}', float) != limit:
             raise MotorException(
-                "Failed to set current limit: Mismatched confirmation message.")
+                'Failed to set current limit: Mismatched confirmation message.')
 
-    def setVoltageLimit(self, limit: float) -> None:
+    def set_voltage_limit(self, limit: float) -> None:
         """
         Set motor voltage limit
 
@@ -269,11 +273,11 @@ class Motor:
         ------
         MotorException
         """
-        if self._sendCommand(f'MLU{limit}', float) != limit:
+        if self._send_command(f'MLU{limit}', float) != limit:
             raise MotorException(
-                "Failed to set voltage limit: Mismatched confirmation message.")
+                'Failed to set voltage limit: Mismatched confirmation message.')
 
-    def setVelocityLimit(self, limit: float) -> None:
+    def set_velocity_limit(self, limit: float) -> None:
         """
         Set motor velocity limit
 
@@ -286,11 +290,11 @@ class Motor:
         ------
         MotorException
         """
-        if self._sendCommand(f'MLV{limit}', float) != limit:
+        if self._send_command(f'MLV{limit}', float) != limit:
             raise MotorException(
-                "Failed to set velocity limit: Mismatched confirmation message.")
+                'Failed to set velocity limit: Mismatched confirmation message.')
 
-    def setControlMode(self, mode: Literal['torque', 'velocity', 'angle'] = 'torque') -> None:
+    def set_control_mode(self, mode: Literal['torque', 'velocity', 'angle'] = 'torque') -> None:
         """
         Set control mode
 
@@ -310,9 +314,9 @@ class Motor:
             'velocity': 1,
             'angle': 2,
         }
-        if self._sendCommand(f'MC{d[mode]}', str)[:3] != mode[:3]:
+        if self._send_command(f'MC{d[mode]}', str)[:3] != mode[:3]:
             raise MotorException(
-                "Failed to set control mode: Mismatched confirmation message.")
+                'Failed to set control mode: Mismatched confirmation message.')
         else:
             self.controlMode = mode
 
@@ -332,6 +336,6 @@ class Motor:
         if self.controlMode == 'angle':
             pos = round(pos + self.offset, 3)
 
-        if self._sendCommand(f'M{pos}', float) != pos:
+        if self._send_command(f'M{pos}', float) != pos:
             raise MotorException(
-                "Failed to set target position: Mismatched confirmation message.")
+                'Failed to set target position: Mismatched confirmation message.')

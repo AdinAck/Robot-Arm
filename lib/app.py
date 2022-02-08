@@ -11,25 +11,26 @@ from typing import Optional
 
 
 class Application(ttk.Frame):
-    system: System = System()
+    system: System
 
     def __init__(self, master):
         ttk.Frame.__init__(self, master)
         self.root = master
-        self.pack(fill="both", expand=True)
+        self.pack(fill='both', expand=True)
 
-        self.moveDurationVar = tk.DoubleVar()
-        self.moveDurationVar.set(2)
-        self.motorsEnabledVar = tk.BooleanVar()
-        self.motorsEnabledVar.set(True)
+        self.move_duration_var = tk.DoubleVar()
+        self.move_duration_var.set(2)
+        self.motors_enabled_var = tk.BooleanVar()
+        self.motors_enabled_var.set(True)
 
         self.initPopup = tk.Toplevel(self)
-        self.initPopup.geometry("500x100")
-        self.initPopup.protocol("WM_DELETE_WINDOW", lambda: None)
-        ttk.Label(self.initPopup, text="Initializing...").pack(side="top")
+        self.initPopup.geometry('500x100')
+        self.initPopup.protocol('WM_DELETE_WINDOW', lambda: None)
+        ttk.Label(self.initPopup, text='Initializing...').pack(side='top')
 
-        progress_bar = ttk.Progressbar(self.initPopup, mode="indeterminate", value=1)
-        progress_bar.pack(fill="x", expand=1, side="bottom", padx=10, pady=10)
+        progress_bar = ttk.Progressbar(
+            self.initPopup, mode='indeterminate', value=1)
+        progress_bar.pack(fill='x', expand=1, side='bottom', padx=10, pady=10)
 
         # Initialize Up Robot Arm
         self.system = System()
@@ -55,63 +56,63 @@ class Application(ttk.Frame):
         fileMenu = tk.Menu(menubar, tearoff=0)
         toolsMenu = tk.Menu(menubar, tearoff=0)
         motorMenu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="File", menu=fileMenu)
-        menubar.add_cascade(label="Tools", menu=toolsMenu)
+        menubar.add_cascade(label='File', menu=fileMenu)
+        menubar.add_cascade(label='Tools', menu=toolsMenu)
         fileMenu.add_command(
-            label="Load Job", command=lambda: Thread(target=self.loadJob).start()
+            label='Load Job', command=lambda: Thread(target=self.loadJob).start()
         )
-        fileMenu.add_command(label="Save Job")
-        toolsMenu.add_command(label="Record Job")
-        toolsMenu.add_cascade(label="Motors", menu=motorMenu)
+        fileMenu.add_command(label='Save Job')
+        toolsMenu.add_command(label='Record Job')
+        toolsMenu.add_cascade(label='Motors', menu=motorMenu)
         toolsMenu.add_command(
-            label="Calibration Wizard", command=self.calibrationWizard.show
+            label='Calibration Wizard', command=self.calibrationWizard.show
         )
-        toolsMenu.add_command(label="Visual", command=self.visual.show)
+        toolsMenu.add_command(label='Visual', command=self.visual.show)
         motorMenu.add_checkbutton(
-            label="Enable",
-            variable=self.motorsEnabledVar,
-            command=lambda: self.motorsEnabled(self.motorsEnabledVar.get()),
+            label='Enable',
+            variable=self.motors_enabled_var,
+            command=lambda: self.motorsEnabled(self.motors_enabled_var.get()),
         )
         motorMenu.add_command(
-            label="Configure...", command=self.configureationPanel.show
+            label='Configure...', command=self.configureationPanel.show
         )
         self.root.config(menu=menubar)
 
         # Inside of Self
         r = 0
         self.controlFrame = ttk.Frame(self)
-        self.controlFrame.pack(side="left", fill="both", expand=True)
+        self.controlFrame.pack(side='left', fill='both', expand=True)
 
         # Inside of ControlFrame
         r, c = 0, 0
 
         sliderFrame = ttk.Frame(self.controlFrame)
-        sliderFrame.grid(row=r, column=c, sticky="WE")
+        sliderFrame.grid(row=r, column=c, sticky='WE')
 
         r += 1
 
         tk.Button(
             self.controlFrame,
-            text="Emergency Stop",
-            fg="#F00000",
+            text='Emergency Stop',
+            fg='#F00000',
             command=lambda: self.motorsEnabled(False),
-        ).grid(row=r, column=c, sticky="W", padx=5, pady=5)
+        ).grid(row=r, column=c, sticky='W', padx=5, pady=5)
 
         # Inside of SliderFrame
         r = 0
 
-        ttk.Label(sliderFrame, text="Axis Motors", font="Helvetica 16 bold").grid(
-            row=r, column=0, sticky="W", padx=5, pady=5
+        ttk.Label(sliderFrame, text='Axis Motors', font='Helvetica 16 bold').grid(
+            row=r, column=0, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(sliderFrame, orient="horizontal").grid(
-            sticky="WE", columnspan=3, padx=5, pady=5
+        ttk.Separator(sliderFrame, orient='horizontal').grid(
+            sticky='WE', columnspan=3, padx=5, pady=5
         )
 
         r += 2
 
         self.targetXVar = tk.DoubleVar()
         self.targetXVar.set(15)
-        self.targetXLabel = ttk.Label(sliderFrame, text="Target X:")
+        self.targetXLabel = ttk.Label(sliderFrame, text='Target X:')
         self.targetXLabel.grid(row=r, padx=5)
 
         self.targetXEntry = ttk.Entry(
@@ -119,7 +120,7 @@ class Application(ttk.Frame):
         )
         self.targetXEntry.grid(row=r, column=1, padx=5)
         self.targetXEntry.bind(
-            "<Return>", lambda _: Thread(target=self.jog, daemon=True).start()
+            '<Return>', lambda _: Thread(target=self.jog, daemon=True).start()
         )
 
         self.targetXSlider = ttk.Scale(
@@ -128,14 +129,14 @@ class Application(ttk.Frame):
             command=lambda x: self.updateTargets(x=round(float(x), 2)),
             from_=0,
             to=30,
-            orient="horizontal",
+            orient='horizontal',
         )
         self.targetXSlider.grid(row=r, column=2, padx=5)
 
         r += 1
 
         self.targetYVar = tk.DoubleVar()
-        self.targetYLabel = ttk.Label(sliderFrame, text="Target Y:")
+        self.targetYLabel = ttk.Label(sliderFrame, text='Target Y:')
         self.targetYLabel.grid(row=r, padx=5)
 
         self.targetYEntry = ttk.Entry(
@@ -143,7 +144,7 @@ class Application(ttk.Frame):
         )
         self.targetYEntry.grid(row=r, column=1, padx=5)
         self.targetYEntry.bind(
-            "<Return>", lambda _: Thread(target=self.jog, daemon=True).start()
+            '<Return>', lambda _: Thread(target=self.jog, daemon=True).start()
         )
 
         self.targetYSlider = ttk.Scale(
@@ -152,7 +153,7 @@ class Application(ttk.Frame):
             command=lambda y: self.updateTargets(y=round(float(y), 2)),
             from_=-30,
             to=30,
-            orient="horizontal",
+            orient='horizontal',
         )
         self.targetYSlider.grid(row=r, column=2, padx=5)
 
@@ -160,7 +161,7 @@ class Application(ttk.Frame):
 
         self.targetZVar = tk.DoubleVar()
         self.targetZVar.set(45)
-        self.targetZLabel = ttk.Label(sliderFrame, text="Target Z:")
+        self.targetZLabel = ttk.Label(sliderFrame, text='Target Z:')
         self.targetZLabel.grid(row=r, padx=5)
 
         self.targetZEntry = ttk.Entry(
@@ -168,7 +169,7 @@ class Application(ttk.Frame):
         )
         self.targetZEntry.grid(row=r, column=1, padx=5)
         self.targetZEntry.bind(
-            "<Return>", lambda _: Thread(target=self.jog, daemon=True).start()
+            '<Return>', lambda _: Thread(target=self.jog, daemon=True).start()
         )
 
         self.targetZSlider = ttk.Scale(
@@ -177,14 +178,14 @@ class Application(ttk.Frame):
             command=lambda z: self.updateTargets(z=round(float(z), 2)),
             from_=0,
             to=90,
-            orient="horizontal",
+            orient='horizontal',
         )
         self.targetZSlider.grid(row=r, column=2, padx=5)
 
         r += 1
 
         self.targetRVar = tk.DoubleVar()
-        self.targetRLabel = ttk.Label(sliderFrame, text="Target R:")
+        self.targetRLabel = ttk.Label(sliderFrame, text='Target R:')
         self.targetRLabel.grid(row=r, padx=5)
 
         self.targetREntry = ttk.Entry(
@@ -192,7 +193,7 @@ class Application(ttk.Frame):
         )
         self.targetREntry.grid(row=r, column=1, padx=5)
         self.targetREntry.bind(
-            "<Return>", lambda _: Thread(target=self.jog, daemon=True).start()
+            '<Return>', lambda _: Thread(target=self.jog, daemon=True).start()
         )
 
         self.targetRSlider = ttk.Scale(
@@ -201,24 +202,24 @@ class Application(ttk.Frame):
             command=lambda r: self.updateTargets(r=round(float(r), 2)),
             from_=-1.57,
             to=1.57,
-            orient="horizontal",
+            orient='horizontal',
         )
         self.targetRSlider.grid(row=r, column=2, padx=5)
 
         r += 1
 
-        ttk.Label(sliderFrame, text="End Effector", font="Helvetica 16 bold").grid(
-            row=r, column=0, sticky="W", padx=5, pady=5
+        ttk.Label(sliderFrame, text='End Effector', font='Helvetica 16 bold').grid(
+            row=r, column=0, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(sliderFrame, orient="horizontal").grid(
-            sticky="WE", columnspan=3, padx=5, pady=5
+        ttk.Separator(sliderFrame, orient='horizontal').grid(
+            sticky='WE', columnspan=3, padx=5, pady=5
         )
 
         r += 2
 
         self.targetEVar = tk.IntVar()
-        self.targetEVar.set(sum(self.system.endEffector.valueRange) // 2)
-        self.targetELabel = ttk.Label(sliderFrame, text="Target E:")
+        self.targetEVar.set(sum(self.system.endEffector.value_range) // 2)
+        self.targetELabel = ttk.Label(sliderFrame, text='Target E:')
         self.targetELabel.grid(row=r, padx=5)
 
         self.targetEEntry = ttk.Entry(
@@ -226,16 +227,16 @@ class Application(ttk.Frame):
         )
         self.targetEEntry.grid(row=r, column=1, padx=5)
         self.targetEEntry.bind(
-            "<Return>", lambda _: Thread(target=self.jog, daemon=True).start()
+            '<Return>', lambda _: Thread(target=self.jog, daemon=True).start()
         )
 
         self.targetESlider = ttk.Scale(
             sliderFrame,
             variable=self.targetEVar,
             command=lambda e: self.updateTargets(e=round(float(e))),
-            from_=self.system.endEffector.valueRange[0],
-            to=self.system.endEffector.valueRange[1],
-            orient="horizontal",
+            from_=self.system.endEffector.value_range[0],
+            to=self.system.endEffector.value_range[1],
+            orient='horizontal',
         )
         self.targetESlider.grid(row=r, column=2, padx=5)
 
@@ -245,18 +246,19 @@ class Application(ttk.Frame):
         self.handPosToggle = ttk.Checkbutton(
             sliderFrame,
             variable=self.handPosVar,
-            text="Hand Position",
-            command=lambda: Thread(target=self.handPositioning, daemon=True).start(),
+            text='Hand Position',
+            command=lambda: Thread(
+                target=self.handPositioning, daemon=True).start(),
         )
-        self.handPosToggle.grid(row=r, column=0, sticky="W", padx=5, pady=5)
+        self.handPosToggle.grid(row=r, column=0, sticky='W', padx=5, pady=5)
 
         self.realtimeVar = tk.BooleanVar()
         self.realtimeToggle = ttk.Checkbutton(
-            sliderFrame, variable=self.realtimeVar, text="Realtime"
+            sliderFrame, variable=self.realtimeVar, text='Realtime'
         )
-        self.realtimeToggle.grid(row=r, column=1, sticky="W", padx=5, pady=5)
+        self.realtimeToggle.grid(row=r, column=1, sticky='W', padx=5, pady=5)
 
-        self.jogButton = ttk.Button(sliderFrame, text="Jog", command=self.jog)
+        self.jogButton = ttk.Button(sliderFrame, text='Jog', command=self.jog)
         self.jogButton.grid(row=r, column=2, padx=5, pady=5)
 
         r += 1
@@ -289,39 +291,40 @@ class Application(ttk.Frame):
 
     def loadJob(self):
         fileName = fd.askopenfilename(
-            title="Select Job File",
-            filetypes=[("GCode", "*.gcode")],
+            title='Select Job File',
+            filetypes=[('GCode', '*.gcode')],
         )
 
         self.jobPopup = tk.Toplevel(self)
-        self.jobPopup.geometry("500x100")
-        self.jobPopup.protocol("WM_DELETE_WINDOW", lambda: None)
-        ttk.Label(self.jobPopup, text="Running Job").pack(side="top")
+        self.jobPopup.geometry('500x100')
+        self.jobPopup.protocol('WM_DELETE_WINDOW', lambda: None)
+        ttk.Label(self.jobPopup, text='Running Job').pack(side='top')
         progress = 0
         progressVar = tk.IntVar()
 
         self.realtimeVar.set(False)
 
-        with open(fileName, "r") as f:
+        with open(fileName, 'r') as f:
             lines = f.readlines()
             progress_bar = ttk.Progressbar(
                 self.jobPopup, variable=progressVar, length=500, maximum=len(lines)
             )
-            progress_bar.pack(fill="x", expand=1, side="bottom", padx=10, pady=10)
+            progress_bar.pack(fill='x', expand=1,
+                              side='bottom', padx=10, pady=10)
             for line in lines:
                 for argument, value in readGcodeLine(line):
-                    if argument == "X":
+                    if argument == 'X':
                         self.targetXVar.set(value)
-                    elif argument == "Y":
+                    elif argument == 'Y':
                         self.targetYVar.set(value)
-                    elif argument == "Z":
+                    elif argument == 'Z':
                         self.targetZVar.set(value)
-                    elif argument == "R":
+                    elif argument == 'R':
                         self.targetRVar.set(value)
-                    elif argument == "E":
+                    elif argument == 'E':
                         self.targetEVar.set(int(value))
-                    elif argument == "D":
-                        self.moveDurationVar.set(value)
+                    elif argument == 'D':
+                        self.move_duration_var.set(value)
                 self.jog()
                 progress += 1
                 progressVar.set(progress)
@@ -356,7 +359,7 @@ class Application(ttk.Frame):
         timeout = 5
         epsilon = 0.1
 
-        self.jogButton["state"] = "disabled"
+        self.jogButton['state'] = 'disabled'
 
         t1, t2 = self.system.cartesianToDualPolar(
             self.targetXVar.get(), self.targetYVar.get()
@@ -369,7 +372,7 @@ class Application(ttk.Frame):
             self.system.jog(t1=t1, t2=t2, z=z, r=r, e=e)
         else:
             self.system.smoothMove(
-                self.moveDurationVar.get(),
+                self.move_duration_var.get(),
                 timeout=timeout,
                 epsilon=epsilon,
                 t1=t1,
@@ -379,11 +382,11 @@ class Application(ttk.Frame):
                 e=e,
             )
 
-        self.jogButton["state"] = "normal"
+        self.jogButton['state'] = 'normal'
 
     def motorsEnabled(self, value: bool):
         self.system.motorsEnabled(value)
-        self.motorsEnabledVar.set(value)
+        self.motors_enabled_var.set(value)
 
     def on_close(self):
         self.motorsEnabled(False)
