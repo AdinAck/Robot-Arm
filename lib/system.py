@@ -31,7 +31,7 @@ class System:
     motors: dict[int, Motor] = {}
     l1: float = 15.5
     l2: float = 15.25
-    minimumRadius: float = 10
+    minimum_radius: float = 10
 
     def __init__(self):
         """
@@ -40,7 +40,7 @@ class System:
         Connect to all devices and configure motors.
         """
         for d in comports():
-            if d.description == Motor.deviceName:
+            if d.description == Motor.device_name:
                 # attach motors
                 m = Motor(str(d.device))
                 try:
@@ -49,7 +49,7 @@ class System:
                     raise NotImplementedError('Unidentifiable motor.')
             elif d.description == EndEffector.deviceName:
                 # attach end effector
-                self.endEffector = EndEffector(str(d.device))
+                self.end_effector = EndEffector(str(d.device))
 
         try:
             self.m_vertical = self.motors[1]
@@ -59,7 +59,7 @@ class System:
         except KeyError:
             raise NotImplementedError(
                 'A serial connection could not be established with at least one motor. '
-                + f'Detected motor(s): {[key for key in self.motors]}'
+                + f'Detected motor(s): {[id for id in self.motors]}'
             )
 
         # All below should be somehow defined in a file or something
@@ -76,19 +76,19 @@ class System:
         self.m_vertical.set_PIDs('angle', 10)
 
         self.m_inner_rot.set_voltage_limit(12)
-        # self.m_inner_rot.setVelocityLimit(8)
+        self.m_inner_rot.set_velocity_limit(4)
         self.m_inner_rot.set_PIDs('vel', 2, 20, R=200, F=0.01)
-        self.m_inner_rot.set_PIDs('angle', 30, D=4, R=125, F=0.01)
+        self.m_inner_rot.set_PIDs('angle', 20, D=4, R=125, F=0.01)
 
         self.m_outer_rot.set_voltage_limit(12)
-        # self.m_outer_rot.setVelocityLimit(8)
+        self.m_outer_rot.set_velocity_limit(4)
         self.m_outer_rot.set_PIDs('vel', 0.6, 20, F=0.01)
         self.m_outer_rot.set_PIDs('angle', 20, D=3, R=100, F=0.01)
 
         self.m_end_rot.set_voltage_limit(12)
-        # self.m_end_rot.setVelocityLimit(8)
+        self.m_end_rot.set_velocity_limit(12)
 
-    def loadMotors(self, onFail: Optional[Callable] = None):
+    def load_motors(self, onFail: Optional[Callable] = None):
         """
         Load motor calibration from disk.
 
@@ -99,23 +99,23 @@ class System:
         onFail: Optional[Callable]
             Callback for if files are not found or corrupted.
         """
-        self.singleEndedHome(self.m_vertical, 45, -4)
+        self.single_ended_home(self.m_vertical, 140/2, -4)
 
         try:
             with open('config/inner_rot', 'r') as f:
-                self.absoluteHome(
+                self.absolute_home(
                     self.m_inner_rot, *(float(f.readline().strip())
                                         for _ in range(3))
                 )
 
             with open('config/outer_rot', 'r') as f:
-                self.absoluteHome(
+                self.absolute_home(
                     self.m_outer_rot, *(float(f.readline().strip())
                                         for _ in range(3))
                 )
 
             with open('config/end_rot', 'r') as f:
-                self.absoluteHome(
+                self.absolute_home(
                     self.m_end_rot, *(float(f.readline().strip())
                                       for _ in range(3))
                 )
@@ -126,7 +126,7 @@ class System:
                 raise NotImplementedError(
                     'Failed to load motor config from disk.')
 
-    def motorsEnabled(self, value: bool):
+    def motors_enabled(self, value: bool):
         """
         Helper function to enable or disable all motors.
 
@@ -140,7 +140,7 @@ class System:
             f(motor)
 
     @staticmethod
-    def autoCalibrate(
+    def auto_calibrate(
         motor: Motor, voltage: float = 3, speed: float = 1, zeroSpeed: float = 0.1
     ) -> tuple[float, float, float]:
         """
@@ -200,7 +200,7 @@ class System:
             raise NotImplementedError('Failed to calibrate motor.')
 
     @staticmethod
-    def absoluteHome(motor: Motor, low: float, high: float, center: float) -> None:
+    def absolute_home(motor: Motor, low: float, high: float, center: float) -> None:
         """
         Determine the zero position of a motor with movement limited to less than 1 full rotation.
 
@@ -233,7 +233,7 @@ class System:
             raise NotImplementedError('Failed to home motor.')
 
     @staticmethod
-    def singleEndedHome(
+    def single_ended_home(
         motor: Motor,
         centerOffset: float = 0,
         voltage: float = 3,
@@ -284,7 +284,7 @@ class System:
         except MotorException:
             raise NotImplementedError('Failed to home motor.')
 
-    def polarToCartesian(self, t1: float, t2: float) -> tuple[float, float]:
+    def polar_to_cartesian(self, t1: float, t2: float) -> tuple[float, float]:
         """
         Convert polar coordinates to cartesian.
 
@@ -304,7 +304,7 @@ class System:
             -t2 - t1
         ), self.l1 * math.sin(t1) + self.l2 * math.sin(t2 + t1)
 
-    def cartesianToDualPolar(self, x: float, y: float):
+    def cartesian_to_dual_polar(self, x: float, y: float):
         """
         Convert cartesian coordinates to cascaded polar coordinates.
 
@@ -325,10 +325,10 @@ class System:
         r = abs(complex(x, y))
         a = math.atan2(y, x)
 
-        if r <= self.minimumRadius:
-            return self.cartesianToDualPolar(
-                (self.minimumRadius + 0.1) * math.cos(a),
-                (self.minimumRadius + 0.1) * math.sin(a),
+        if r <= self.minimum_radius:
+            return self.cartesian_to_dual_polar(
+                (self.minimum_radius + 0.1) * math.cos(a),
+                (self.minimum_radius + 0.1) * math.sin(a),
             )
         elif r > self.l1 + self.l2:
             return a, 0
@@ -351,7 +351,7 @@ class System:
 
         return t1, t2
 
-    def getAllPos(self):
+    def get_all_pos(self):
         """
         Retrieve all motor positions.
 
@@ -392,9 +392,9 @@ class System:
         self.joints['z'].move(z)
 
         if e is not None:
-            self.endEffector.move(e)
+            self.end_effector.move(e)
 
-    def smoothMove(self, duration: float, timeout: float = 1, epsilon: float = 0.1, **target) -> None:
+    def smooth_move(self, duration: float, timeout: float = 1, epsilon: float = 0.1, **target) -> None:
         """
         Smoothly move the motors to a target position.
 
@@ -412,13 +412,13 @@ class System:
             The target position of the motors.
         """
         try:
-            t1, t2, z, r = self.getAllPos()
+            t1, t2, z, r = self.get_all_pos()
 
             start = {'t1': t1, 't2': t2, 'z': z, 'r': r + t1}
 
             self.jog(**start, e=target['e'])
-            startTime = time()
-            while (t := time() - startTime) < duration:
+            start_time = time()
+            while (t := time() - start_time) < duration:
                 self.jog(
                     **{
                         axis: bezier(
@@ -436,10 +436,10 @@ class System:
                     }
                 )
 
-            startTime = time()
-            while time() - startTime < timeout:
+            start_time = time()
+            while time() - start_time < timeout:
                 sleep(0.1)
-                p1, p2, p3, p4 = self.getAllPos()
+                p1, p2, p3, p4 = self.get_all_pos()
 
                 if (
                     abs(target['t1'] - p1) < epsilon

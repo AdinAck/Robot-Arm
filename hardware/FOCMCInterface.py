@@ -33,10 +33,10 @@ class Motor:
     lock: Lock
         Thread lock for serial calls
     """
-    deviceName: str = 'Adafruit Feather M0'
+    device_name: str = 'Adafruit Feather M0'
     m_id: int = -1
     offset: float = 0
-    controlMode: Literal['torque', 'velocity', 'angle'] = 'torque'
+    control_mode: Literal['torque', 'velocity', 'angle'] = 'torque'
 
     def __init__(self, port: str) -> None:
         """
@@ -318,7 +318,7 @@ class Motor:
             raise MotorException(
                 'Failed to set control mode: Mismatched confirmation message.')
         else:
-            self.controlMode = mode
+            self.control_mode = mode
 
     def move(self, pos: float) -> None:
         """
@@ -333,7 +333,7 @@ class Motor:
         ------
         MotorException
         """
-        if self.controlMode == 'angle':
+        if self.control_mode == 'angle':
             pos = round(pos + self.offset, 3)
 
         if self._send_command(f'M{pos}', float) != pos:

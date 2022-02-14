@@ -6,46 +6,46 @@ from lib.widget import Widget
 
 
 class CalibrationWizard(Widget):
-    contentFrame: ttk.Frame
-    continueButton: ttk.Button
-    cancelButton: ttk.Button
+    content_frame: ttk.Frame
+    continue_button: ttk.Button
+    cancel_button: ttk.Button
 
     def setup(self):
         self.title('Calibration Wizard')
         self.geometry('400x400')
 
-        self.control._system.motorsEnabled(False)
+        self.control._system.motors_enabled(False)
         self.step1()
 
     def step1(self):
-        self.contentFrame = ttk.Frame(self)
-        self.contentFrame.pack(side='top', fill='both', expand=True)
-        self.contentFrame.grid_rowconfigure(0, weight=1)
-        self.contentFrame.grid_rowconfigure(10, weight=1)
-        self.contentFrame.grid_columnconfigure(0, weight=1)
-        self.contentFrame.grid_columnconfigure(2, weight=1)
+        self.content_frame = ttk.Frame(self)
+        self.content_frame.pack(side='top', fill='both', expand=True)
+        self.content_frame.grid_rowconfigure(0, weight=1)
+        self.content_frame.grid_rowconfigure(10, weight=1)
+        self.content_frame.grid_columnconfigure(0, weight=1)
+        self.content_frame.grid_columnconfigure(2, weight=1)
 
         buttons = ttk.Frame(self)
         buttons.pack(side='bottom', fill='x')
 
-        self.continueButton = ttk.Button(
+        self.continue_button = ttk.Button(
             buttons, text='Continue', command=self.step2)
-        self.continueButton.pack(side='right')
-        self.cancelButton = ttk.Button(
+        self.continue_button.pack(side='right')
+        self.cancel_button = ttk.Button(
             buttons, text='Cancel', command=self.close)
-        self.cancelButton.pack(side='right')
+        self.cancel_button.pack(side='right')
 
         r, c = 1, 1
 
-        ttk.Label(self.contentFrame, text='Inner Rotational Motor', font='Helvetica 18 bold').grid(
+        ttk.Label(self.content_frame, text='Inner Rotational Motor', font='Helvetica 18 bold').grid(
             row=r, column=c, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(self.contentFrame, orient='horizontal').grid(
+        ttk.Separator(self.content_frame, orient='horizontal').grid(
             column=c, sticky='WE', padx=5, pady=5
         )
 
         ttk.Label(
-            self.contentFrame,
+            self.content_frame,
             text="""The inner rotational motor requires manual calibration.
 The motor will start slowly rotating left.
 Let the motor spin as far as you are comfortable
@@ -55,38 +55,38 @@ Click continue to begin.
         ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def step2(self):
-        self.continueButton['text'] = 'Working...'
-        self.continueButton['state'] = 'disabled'
+        self.continue_button['text'] = 'Working...'
+        self.continue_button['state'] = 'disabled'
 
         self.control._system.m_outer_rot.offset = 0
         self.control._system.m_inner_rot.offset = 0
         self.control._system.m_end_rot.offset = 0
 
-        low = self.control._system.singleEndedHome(
+        low = self.control._system.single_ended_home(
             self.control._system.m_inner_rot, voltage=-12, zeroSpeed=0.1, active=False
         )
 
         with open('config/inner_rot', 'w') as f:
             f.write(f'{low}\n')
 
-        self.continueButton['command'] = self.step3
-        self.continueButton['state'] = 'normal'
-        self.continueButton['text'] = 'Continue'
+        self.continue_button['command'] = self.step3
+        self.continue_button['state'] = 'normal'
+        self.continue_button['text'] = 'Continue'
 
-        for child in self.contentFrame.winfo_children():
+        for child in self.content_frame.winfo_children():
             child.destroy()
 
         r, c = 1, 1
 
-        ttk.Label(self.contentFrame, text='Inner Rotational Motor', font='Helvetica 18 bold').grid(
+        ttk.Label(self.content_frame, text='Inner Rotational Motor', font='Helvetica 18 bold').grid(
             row=r, column=c, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(self.contentFrame, orient='horizontal').grid(
+        ttk.Separator(self.content_frame, orient='horizontal').grid(
             column=c, sticky='WE', padx=5, pady=5
         )
 
         ttk.Label(
-            self.contentFrame,
+            self.content_frame,
             text="""Now the motor will rotate to the right.
 Let the motor spin as far as you are comfortable
 and stop it with your hand when you are ready.
@@ -95,42 +95,42 @@ Click continue to begin.
         ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def step3(self):
-        self.continueButton['text'] = 'Working...'
-        self.continueButton['state'] = 'disabled'
+        self.continue_button['text'] = 'Working...'
+        self.continue_button['state'] = 'disabled'
 
-        high = self.control._system.singleEndedHome(
+        high = self.control._system.single_ended_home(
             self.control._system.m_inner_rot, voltage=12, zeroSpeed=0.1, active=False
         )
 
         with open('config/inner_rot', 'a') as f:
             f.write(f'{high}\n')
 
-        self.continueButton['command'] = self.step4
-        self.continueButton['state'] = 'normal'
-        self.continueButton['text'] = 'Continue'
+        self.continue_button['command'] = self.step4
+        self.continue_button['state'] = 'normal'
+        self.continue_button['text'] = 'Continue'
 
-        for child in self.contentFrame.winfo_children():
+        for child in self.content_frame.winfo_children():
             child.destroy()
 
         r, c = 1, 1
 
-        ttk.Label(self.contentFrame, text='Inner Rotational Motor', font='Helvetica 18 bold').grid(
+        ttk.Label(self.content_frame, text='Inner Rotational Motor', font='Helvetica 18 bold').grid(
             row=r, column=c, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(self.contentFrame, orient='horizontal').grid(
+        ttk.Separator(self.content_frame, orient='horizontal').grid(
             column=c, sticky='WE', padx=5, pady=5
         )
 
         ttk.Label(
-            self.contentFrame,
+            self.content_frame,
             text="""Position the motor where you would like the center to be.
 Click continue to begin.
                      """,
         ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def step4(self):
-        self.continueButton['text'] = 'Working...'
-        self.continueButton['state'] = 'disabled'
+        self.continue_button['text'] = 'Working...'
+        self.continue_button['state'] = 'disabled'
 
         motor = self.control._system.m_inner_rot
 
@@ -148,31 +148,31 @@ Click continue to begin.
         motor.move(0)
         motor.enable()
 
-        self.continueButton['command'] = self.step5
-        self.continueButton['state'] = 'normal'
-        self.continueButton['text'] = 'Continue'
+        self.continue_button['command'] = self.step5
+        self.continue_button['state'] = 'normal'
+        self.continue_button['text'] = 'Continue'
 
-        for child in self.contentFrame.winfo_children():
+        for child in self.content_frame.winfo_children():
             child.destroy()
 
         r, c = 1, 1
 
-        ttk.Label(self.contentFrame, text='End Effector Rotational Motor', font='Helvetica 18 bold').grid(
+        ttk.Label(self.content_frame, text='End Effector Rotational Motor', font='Helvetica 18 bold').grid(
             row=r, column=c, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(self.contentFrame, orient='horizontal').grid(
+        ttk.Separator(self.content_frame, orient='horizontal').grid(
             column=c, sticky='WE', padx=5, pady=5
         )
 
         ttk.Label(
-            self.contentFrame,
+            self.content_frame,
             text="""Position the motor where you would like the left extreme to be.
 Click continue to begin.""",
         ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def step5(self, word='left'):
-        self.continueButton['text'] = 'Working...'
-        self.continueButton['state'] = 'disabled'
+        self.continue_button['text'] = 'Working...'
+        self.continue_button['state'] = 'disabled'
 
         motor = self.control._system.m_end_rot
 
@@ -187,17 +187,17 @@ Click continue to begin.""",
 
         if word != 'center':
             if word == 'left':
-                self.continueButton['command'] = lambda: self.step5('right')
+                self.continue_button['command'] = lambda: self.step5('right')
                 word = 'right'
             elif word == 'right':
-                self.continueButton['command'] = lambda: self.step5('center')
+                self.continue_button['command'] = lambda: self.step5('center')
                 word = 'center'
             word += ' extreme'
 
-        self.continueButton['state'] = 'normal'
-        self.continueButton['text'] = 'Continue'
+        self.continue_button['state'] = 'normal'
+        self.continue_button['text'] = 'Continue'
 
-        for child in self.contentFrame.winfo_children():
+        for child in self.content_frame.winfo_children():
             child.destroy()
 
         if word == 'center':
@@ -207,21 +207,21 @@ Click continue to begin.""",
 
         r, c = 1, 1
 
-        ttk.Label(self.contentFrame, text='End Effector Rotational Motor', font='Helvetica 18 bold').grid(
+        ttk.Label(self.content_frame, text='End Effector Rotational Motor', font='Helvetica 18 bold').grid(
             row=r, column=c, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(self.contentFrame, orient='horizontal').grid(
+        ttk.Separator(self.content_frame, orient='horizontal').grid(
             column=c, sticky='WE', padx=5, pady=5
         )
         ttk.Label(
-            self.contentFrame,
+            self.content_frame,
             text=f"""Position the motor where you would like the {word} to be.
 Click continue to begin.""",
         ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def step6(self):
-        self.continueButton['text'] = 'Working...'
-        self.continueButton['state'] = 'disabled'
+        self.continue_button['text'] = 'Working...'
+        self.continue_button['state'] = 'disabled'
 
         motor = self.control._system.m_end_rot
 
@@ -229,54 +229,54 @@ Click continue to begin.""",
         motor.move(0)
         motor.enable()
 
-        self.continueButton['command'] = self.step7
-        self.continueButton['state'] = 'normal'
-        self.continueButton['text'] = 'Continue'
+        self.continue_button['command'] = self.step7
+        self.continue_button['state'] = 'normal'
+        self.continue_button['text'] = 'Continue'
 
-        for child in self.contentFrame.winfo_children():
+        for child in self.content_frame.winfo_children():
             child.destroy()
 
         r, c = 1, 1
 
-        ttk.Label(self.contentFrame, text='Outer Rotational Motor', font='Helvetica 18 bold').grid(
+        ttk.Label(self.content_frame, text='Outer Rotational Motor', font='Helvetica 18 bold').grid(
             row=r, column=c, sticky='W', padx=5, pady=5
         )
-        ttk.Separator(self.contentFrame, orient='horizontal').grid(
+        ttk.Separator(self.content_frame, orient='horizontal').grid(
             column=c, sticky='WE', padx=5, pady=5
         )
         ttk.Label(
-            self.contentFrame,
-            text='Motor 3 can self calibrate,\nclick Continue to begin.',
+            self.content_frame,
+            text='The outer rotational motor can self calibrate,\nclick Continue to begin.',
         ).grid(column=c, sticky='W', padx=5, pady=5)
 
     def step7(self):
-        self.continueButton['text'] = 'Working...'
-        self.continueButton['state'] = 'disabled'
+        self.continue_button['text'] = 'Working...'
+        self.continue_button['state'] = 'disabled'
 
         with open('config/outer_rot', 'w') as f:
-            for num in self.control._system.autoCalibrate(
+            for num in self.control._system.auto_calibrate(
                 self.control._system.m_outer_rot, voltage=6, speed=2
             ):
                 f.write(f'{num}\n')
 
-        self.cancelButton.destroy()
-        self.continueButton['command'] = self.close
-        self.continueButton['state'] = 'normal'
-        self.continueButton['text'] = 'Finish'
+        self.cancel_button.destroy()
+        self.continue_button['command'] = self.close
+        self.continue_button['state'] = 'normal'
+        self.continue_button['text'] = 'Finish'
 
-        for child in self.contentFrame.winfo_children():
+        for child in self.content_frame.winfo_children():
             child.destroy()
 
         r, c = 1, 1
 
         ttk.Label(
-            self.contentFrame, text='Calibration Complete', font='Helvetica 18 bold'
+            self.content_frame, text='Calibration Complete', font='Helvetica 18 bold'
         ).grid(row=r, column=c, sticky='W', padx=5, pady=5)
-        ttk.Separator(self.contentFrame, orient='horizontal').grid(
+        ttk.Separator(self.content_frame, orient='horizontal').grid(
             column=c, sticky='WE', padx=5, pady=5
         )
 
-        ttk.Label(self.contentFrame, text='Click finish to close this window.').grid(
+        ttk.Label(self.content_frame, text='Click finish to close this window.').grid(
             column=c, sticky='W', padx=5, pady=5
         )
 
@@ -286,5 +286,5 @@ Click continue to begin.""",
         raise NotImplementedError('Calibration wizard failed.')
 
     def close(self):
-        self.control._system.motorsEnabled(True)
+        self.control._system.motors_enabled(True)
         super().close()

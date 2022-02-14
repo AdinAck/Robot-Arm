@@ -26,54 +26,48 @@ class Control:
         The variable unit position of the end effector.
     """
 
-    _parent: Application
-    _system: System
-
     def __init__(self, parent):
-        self._parent = parent
-        self._system = parent.system
+        self._parent: Application = parent
+        self._system: System = parent.system
 
     @property
-    def x(self) -> float:
-        return self._parent.targetXVar.get()
-
-    @x.setter
-    def x(self, value):
-        self._parent.targetXVar.set(value)
+    def target_x(self):
+        return self._parent.target_x_var.get()
 
     @property
-    def y(self) -> float:
-        return self._parent.targetYVar.get()
-
-    @y.setter
-    def y(self, value):
-        return self._parent.targetYVar.set(value)
+    def target_y(self):
+        return self._parent.target_y_var.get()
 
     @property
-    def z(self) -> float:
-        return self._parent.targetZVar.get()
-
-    @z.setter
-    def z(self, value):
-        self._parent.targetZVar.set(value)
+    def target_z(self):
+        return self._parent.target_z_var.get()
 
     @property
-    def r(self) -> float:
-        return self._parent.targetRVar.get()
-
-    @r.setter
-    def r(self, value):
-        self._parent.targetRVar.set(value)
+    def target_r(self):
+        return self._parent.target_r_var.get()
 
     @property
-    def e(self) -> int:
-        return self._parent.targetEVar.get()
+    def target_e(self):
+        return self._parent.target_e_var.get()
 
-    @e.setter
-    def e(self, value):
-        self._parent.targetEVar.set(value)
+    @property
+    def position(self) -> tuple[float, float, float, float]:
+        """
+        Property for the current position of the system.
 
-    def jog(self, *args: str, duration: Optional[float] = None, timeout: float = None, epsilon: float = None):
+        Returns
+        -------
+        tuple[float, float, float, float, int]
+            x, y, z, r, e positions.
+        """
+
+        t1, t2, z = self._system.get_all_pos()
+
+        return self._system.polar_to_cartesian(t1, t2) + (z, self._system.m_end_rot.position)
+
+    def move(self, *args: str,
+             x: Optional[float], y: Optional[float], z: Optional[float], r: Optional[float], e: Optional[int],
+             duration: Optional[float] = None, timeout: float = None, epsilon: float = None):
         """
         Perform a movement to the target position.
 
@@ -83,6 +77,16 @@ class Control:
             Optional arguments to customize the movement.
                 smooth: Literal['smooth']
                     Configure jog to be smooth.
+        x: Optional[float]
+            The x-coordinate to move to.
+        y: Optional[float]
+            The y-coordinate to move to.
+        z: Optional[float]
+            The z-coordinate to move to.
+        r: Optional[float]
+            The end effector rotation to move to.
+        e: Optional[int]
+            The end effector position to move to.
         duration: Optional[float]
             The duration of the movement.
         timeout: Optional[float]
@@ -90,14 +94,19 @@ class Control:
         epsilon: Optional[float]
             The amount of error allowed before the move is considered complete.
         """
-        t1, t2 = self._system.cartesianToDualPolar(self.x, self.y)
-        z = self.z
-        r = self.r
-        e = self.e
+
+        self._parent.update_targets(x=x, y=y, z=z, r=r, e=e)
+
+        t1, t2 = self._system.cartesian_to_dual_polar(
+            self._parent.target_x_var.get(), self._parent.target_y_var.get()
+        )
+        z = self._parent.target_z_var.get()
+        r = self._parent.target_r_var.get()
+        e = self._parent.target_e_var.get()
 
         if 'smooth' in args:
             assert duration is not None, 'Duration must be specified for smooth move.'
-            assert duration > 0, 'Timeout must be greater than 0.'
+            assert duration > 0, 'Duration must be greater than 0.'
 
             assert timeout is not None, 'Timeout must be specified for smooth move.'
             assert timeout > 0, 'Timeout must be greater than 0.'
@@ -105,7 +114,7 @@ class Control:
             assert epsilon is not None, 'Epsilon must be specified for smooth move.'
             assert epsilon > 0, 'Epsilon must be greater than 0.'
 
-            self._system.smoothMove(
+            self._system.smooth_move(
                 duration, timeout, epsilon, t1=t1, t2=t2, z=z, r=r, e=e
             )
         else:

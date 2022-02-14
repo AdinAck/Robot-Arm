@@ -7,9 +7,10 @@ from lib.widget import Widget
 
 
 class Visual(Widget):
-    running = True
+    running: bool
 
     def setup(self):
+        self.running = True
         self.canvas = tk.Canvas(self, width=400, height=400, bg='white')
         self.canvas.pack()
 
@@ -24,24 +25,27 @@ class Visual(Widget):
         Thread(target=self.loop, daemon=True).start()
 
     def loop(self):
-        while self.running:
-            t1, t2 = self.control._system.cartesianToDualPolar(
-                self.control.x, self.control.y
-            )
-            self._drawArms(self.tar_l1, self.tar_l2, t1, t2)
+        try:
+            while self.running:
+                t1, t2 = self.control._system.cartesian_to_dual_polar(
+                    self.control.target_x, self.control.target_y
+                )
+                self._drawArms(self.tar_l1, self.tar_l2, t1, t2)
 
-            self._drawArms(
-                self.curr_l1,
-                self.curr_l2,
-                self.control._system.m_inner_rot.position,
-                self.control._system.m_outer_rot.position,
-                (
-                    self.control._system.m_inner_rot._send_command(
-                        'MMG1', float),
-                    self.control._system.m_outer_rot._send_command(
-                        'MMG1', float),
-                ),
-            )
+                self._drawArms(
+                    self.curr_l1,
+                    self.curr_l2,
+                    self.control._system.m_inner_rot.position,
+                    self.control._system.m_outer_rot.position,
+                    (
+                        self.control._system.m_inner_rot._send_command(
+                            'MMG1', float),
+                        self.control._system.m_outer_rot._send_command(
+                            'MMG1', float),
+                    ),
+                )
+        except tk.TclError:
+            self.close()
 
     def _drawArms(self, line1, line2, t1, t2, torques=None):
         center = 200

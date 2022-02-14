@@ -1,7 +1,7 @@
 from typing import TextIO, Generator
 
 
-def readGcodeLine(line: str) -> Generator[tuple[str, float], None, None]:
+def read_gcode_line(line: str) -> Generator[tuple[str, float], None, None]:
     for token in line.strip().split(' '):
         if token == '':
             continue
@@ -12,5 +12,5 @@ def readGcodeLine(line: str) -> Generator[tuple[str, float], None, None]:
         yield command, value
 
 
-def writeGcodeLine(file: TextIO, commands: dict[str, float]):
+def write_gcode_line(file: TextIO, commands: dict[str, float]):
     file.write(' '.join(f'{command}{value}' for command, value in commands))
