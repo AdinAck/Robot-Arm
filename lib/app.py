@@ -395,5 +395,5 @@ class Application(ttk.Frame):
 
     def on_close(self):
         self.motors_enabled(False)
-        self.system.end_effector.move(10)
+        self.system.end_effector.disable()
         self.root.destroy()

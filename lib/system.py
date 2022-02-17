@@ -4,7 +4,8 @@ from time import time, sleep
 from typing import Optional, Callable
 
 from hardware.FOCMCInterface import Motor, MotorException
-from hardware.ServoInterface import Servo as EndEffector
+from hardware.EndEffector import EndEffectorException
+from hardware.FOCBLDCEndEffector import FOCBLDC as EndEffector
 
 from lib.bezier import bezier
 
@@ -39,17 +40,35 @@ class System:
 
         Connect to all devices and configure motors.
         """
+
+        ports_used = []
+
         for d in comports():
-            if d.description == Motor.device_name:
-                # attach motors
+            # if d.description == Motor.device_name:
+            #     # attach motors
+            #     m = Motor(str(d.device))
+            #     try:
+            #         self.motors[m.m_id] = m
+            #     except MotorException:
+            #         raise NotImplementedError('Unidentifiable motor.')
+            # elif d.description == EndEffector.deviceName:
+            #     # attach end effector
+            #     self.end_effector = EndEffector(str(d.device))
+            try:
                 m = Motor(str(d.device))
-                try:
+                if 0 < m.m_id < 5:
                     self.motors[m.m_id] = m
-                except MotorException:
-                    raise NotImplementedError('Unidentifiable motor.')
-            elif d.description == EndEffector.deviceName:
-                # attach end effector
-                self.end_effector = EndEffector(str(d.device))
+                    ports_used.append(str(d.device))
+            except MotorException:
+                continue
+        
+        for d in comports():
+            if str(d.device) not in ports_used:
+                try:
+                    self.end_effector = EndEffector(str(d.device))
+                    break
+                except EndEffectorException:
+                    continue
 
         try:
             self.m_vertical = self.motors[1]
@@ -100,6 +119,10 @@ class System:
             Callback for if files are not found or corrupted.
         """
         self.single_ended_home(self.m_vertical, 140/2, -4)
+        self.end_effector.enable()
+        self.auto_calibrate(
+            self.end_effector.m, voltage=6, speed=3
+        )
 
         try:
             with open('config/inner_rot', 'r') as f:
