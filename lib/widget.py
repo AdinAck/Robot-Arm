@@ -5,8 +5,13 @@ import tkinter as tk
 from lib.app import Application
 from lib.system import System
 
-from typing import Optional
+from typing import Optional, Union, TypeVar
 
+T = TypeVar('T', float, int)
+
+def _clamp(value: Optional[T], m: Union[float, int], M: Union[float, int]) -> Optional[T]:
+    if value is not None:
+        return type(value)(min(max(value, m), M))
 
 class Control:
     """
@@ -66,7 +71,7 @@ class Control:
         return self._system.polar_to_cartesian(t1, t2) + (z, self._system.m_end_rot.position)
 
     def move(self, *args: str,
-             x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None, r: Optional[float] = None, e: Optional[int] = None,
+             x: Optional[float], y: Optional[float], z: Optional[float], r: Optional[float], e: Optional[int],
              duration: Optional[float] = None, timeout: float = None, epsilon: float = None):
         """
         Perform a movement to the target position.
@@ -95,16 +100,13 @@ class Control:
             The amount of error allowed before the move is considered complete.
         """
 
-        if x is not None:
-            self._parent.target_x_var.set(x)
-        if y is not None:
-            self._parent.target_y_var.set(y)
-        if z is not None:
-            self._parent.target_z_var.set(z)
-        if r is not None:
-            self._parent.target_r_var.set(r)
-        if e is not None:
-            self._parent.target_e_var.set(e)
+        self._parent.update_targets(
+            x=_clamp(x, 0, 30),
+            y=_clamp(y, -30, 30),
+            z=_clamp(z, 0, 140),
+            r=_clamp(r, -1.57, 1.57),
+            e=_clamp(e, 0, 100)
+        )
 
         t1, t2 = self._system.cartesian_to_dual_polar(
             self._parent.target_x_var.get(), self._parent.target_y_var.get()
