@@ -82,7 +82,7 @@ class Motor:
                 return returnType(r)
             except ValueError:
                 raise MotorException(
-                    f'Received data could not be parsed as {returnType}. COM may be out of sync.\nCommand: {cmd}\nResponse: {r}'
+                    f'Received data could not be parsed as {returnType}. COM may be out of sync.\nCommand: {cmd}\nResponse: {r}\nMotor ID: {self.m_id}'
                 )
 
     def connect(self) -> None:
@@ -101,8 +101,13 @@ class Motor:
         """
         Disconnect from motor
         """
-        self.disable()
-        self.ser.close()
+        try:
+            self.disable()
+            self.ser.close()
+        except SerialException:
+            raise NotImplementedError(
+                'Failed to disconnect from motor: SerialException.'
+            )
 
     @property
     def alive(self) -> bool:
