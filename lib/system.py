@@ -39,17 +39,13 @@ class System:
 
         Connect to all devices and configure motors.
         """
+        self.end_effector = EndEffector('COM4')
         for d in comports():
-            if d.description == Motor.device_name:
-                # attach motors
+            try:
                 m = Motor(str(d.device))
-                try:
-                    self.motors[m.m_id] = m
-                except MotorException:
-                    raise NotImplementedError('Unidentifiable motor.')
-            elif d.description == EndEffector.deviceName:
-                # attach end effector
-                self.end_effector = EndEffector(str(d.device))
+                self.motors[m.m_id] = m
+            except:
+                pass
 
         try:
             self.m_vertical = self.motors[1]
@@ -76,17 +72,17 @@ class System:
         self.m_vertical.set_PIDs('angle', 10)
 
         self.m_inner_rot.set_voltage_limit(12)
-        self.m_inner_rot.set_velocity_limit(4)
+        # self.m_inner_rot.set_velocity_limit(4)
         self.m_inner_rot.set_PIDs('vel', 2, 20, R=200, F=0.01)
         self.m_inner_rot.set_PIDs('angle', 20, D=4, R=125, F=0.01)
 
         self.m_outer_rot.set_voltage_limit(12)
-        self.m_outer_rot.set_velocity_limit(4)
+        # self.m_outer_rot.set_velocity_limit(4)
         self.m_outer_rot.set_PIDs('vel', 0.6, 20, F=0.01)
         self.m_outer_rot.set_PIDs('angle', 20, D=3, R=100, F=0.01)
 
         self.m_end_rot.set_voltage_limit(12)
-        self.m_end_rot.set_velocity_limit(12)
+        # self.m_end_rot.set_velocity_limit(12)
 
     def load_motors(self, onFail: Optional[Callable] = None):
         """

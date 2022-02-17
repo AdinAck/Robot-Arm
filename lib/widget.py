@@ -66,7 +66,7 @@ class Control:
         return self._system.polar_to_cartesian(t1, t2) + (z, self._system.m_end_rot.position)
 
     def move(self, *args: str,
-             x: Optional[float], y: Optional[float], z: Optional[float], r: Optional[float], e: Optional[int],
+             x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None, r: Optional[float] = None, e: Optional[int] = None,
              duration: Optional[float] = None, timeout: float = None, epsilon: float = None):
         """
         Perform a movement to the target position.
@@ -95,7 +95,16 @@ class Control:
             The amount of error allowed before the move is considered complete.
         """
 
-        self._parent.update_targets(x=x, y=y, z=z, r=r, e=e)
+        if x is not None:
+            self._parent.target_x_var.set(x)
+        if y is not None:
+            self._parent.target_y_var.set(y)
+        if z is not None:
+            self._parent.target_z_var.set(z)
+        if r is not None:
+            self._parent.target_r_var.set(r)
+        if e is not None:
+            self._parent.target_e_var.set(e)
 
         t1, t2 = self._system.cartesian_to_dual_polar(
             self._parent.target_x_var.get(), self._parent.target_y_var.get()

@@ -1,42 +1,164 @@
-from http import client
-import socket
 from threading import Thread
-
 from lib.widget import Widget
+
+import cv2
+import mediapipe as mp
+from math import sqrt
+from time import sleep, time
+import numpy as np
+
+cap = cv2.VideoCapture(0)
+#cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands()
+mp_draw = mp.solutions.drawing_utils
+
+def calc_avgs(point_indices, landmarks):
+    x_total = 0
+    y_total = 0
+    z_total = 0
+    for index in point_indices:
+        point = landmarks[index]
+        x_total += point.x
+        y_total += point.y
+        z_total += point.z
+    return x_total/len(point_indices), y_total/len(point_indices), z_total/len(point_indices)
+
+
+# s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# s.connect(("192.168.1.3",8080))
+def clip(x, a, b, c, d, do_round=True):
+    out = (x - a) / (b-a) * (d-c) + c
+    # clip out between c and d
+    out = min(d, max(c, out))   
+    if do_round:
+        out = round(out, 2)
+    return out 
+
+def sgn(x):
+    if x < 0:
+        return -1
+    return 1
+
+def calc_curve(landmarks):
+    vectors = []
+    last_lm = None
+    for lm in landmarks:
+        if last_lm is not None:
+            vectors.append([last_lm.x - lm.x, last_lm.y - lm.y, last_lm.z - lm.z])
+            #print([vectors[-1]])
+        last_lm = lm
+
+    last_lm = None
+    dot_total = 0
+    for lm in vectors:
+        if last_lm is not None:
+            x, y, z = lm
+            lastx, lasty, lastz = last_lm
+            dot = x * lastx + y * lasty + z * lastz
+            print(dot)
+            this_mag = sqrt(x**2 + y**2 + z**2)
+            last_mag = sqrt(lastx**2 + lasty**2 + lastz**2)
+            fixed_dot = dot/this_mag/last_mag
+            dot_total += fixed_dot
+        last_lm = lm
+    return dot_total / (len(landmarks) - 1)
 
 
 class HandTracking(Widget):
     def setup(self):
         self.running = True
-        self.clients = {}
-        self.max_connections = 1
-
-        self._create_socket()
         Thread(target=self.main, daemon=True).start()
 
-    # create socket server
-    def _create_socket(self):
-        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('', 1234))
-        self.s.listen()
-        self.conn, self.addr = self.s.accept()
-        self.conn.settimeout(1)
-        print('Connection address:', self.addr)
-
     def main(self):
+        x_avg, y_avg, z_avg = None, None, None
+        x_vel_sgn_count = 0
+        x_vel_sgn = 0
+        y_vel_sgn_count = 0
+        y_vel_sgn = 0
+        x_vel_avg, y_vel_avg = 0, 0
+        factor = .5
+        start = time()
         while True:
-            clientsocket, address = self.s.accept()
-            print(f'Connection from {address} has been established.')
-            try:
-                while True:
-                    # receive comma separated string from client
-                    buffer = ""
-                    while buffer[-1] != '\n':
-                        buffer += clientsocket.recv(1).decode()
+            _, img = cap.read()
+            imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            results = hands.process(imgRGB)
+            # print("[INFO] handmarks: {}".format(results.multi_hand_landmarks))
 
-                    names = ['x', 'y', 'z']
-                    data = {name: float(s) for name, s in zip(
-                        names, buffer.split(','))}
-                    self.control.move(**data, e=None)
-            except:
-                continue
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    index = 0
+                    for lm in hand_landmarks.landmark:
+                        height, width, channel = img.shape
+                        cx, cy = int(lm.x * width), int(lm.y * height)
+                        col = min(255, max(index-5, 0) * 40)
+                        cv2.circle(img, (cx, cy), 10, (col, col, col), cv2.FILLED)
+                        index += 1
+                    mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                #print(results.multi_hand_landmarks)
+                landmarks = results.multi_hand_landmarks[0].landmark
+
+                
+                avgs = calc_avgs([0, 5, 9, 13, 17], landmarks)
+                x = avgs[0]
+                y = avgs[1]
+                lm1 = landmarks[0]
+                def calc_dist(lm1, lm2):
+                    return sqrt((lm1.x - lm2.x)**2 + (lm1.y - lm2.y)**2 + (lm1.z - lm2.z)**2)
+                z = calc_dist(lm1, landmarks[5]) + calc_dist(lm1, landmarks[17])
+                curve = sum(calc_curve[landmarks[4*i + 5: 4*i+9]] for i in range(4)) / 4
+
+                if x_avg is None:
+                    x_avg = x
+                    y_avg = y
+                    z_avg = z
+                else:
+                    '''
+                    other_factor = .3
+                    x_vel = x - x_avg
+                    y_vel = y - y_avg
+                
+                    x_vel_avg = x_vel * factor + x_vel_avg * (1- other_factor)
+                    y_vel_avg = y_vel * factor + y_vel_avg * (1- other_factor)
+                    if sgn(x_vel) == x_vel_sgn:
+                        x_vel_sgn_count += 1
+                    else:
+                        x_vel_avg = 0
+                        x_vel_sgn_count = 0
+
+                    if sgn(y_vel) == y_vel_sgn:
+                        y_vel_sgn_count += 1
+                    else:
+                        y_vel_avg = 0
+                        y_vel_sgn_count = 0
+                    '''
+
+                    x_avg = x * factor + x_avg * (1 - factor)
+                    y_avg = y * factor + y_avg * (1 - factor)
+                    z_avg = z * factor + z_avg * (1 - factor)
+
+                #lookahead=0
+                #use_x, use_y, use_z = x_avg + x_vel_avg*lookahead, y_avg+y_vel_avg*lookahead, z_avg
+                
+
+                pos = [clip(1/z_avg, 2, 5, 0, 30), clip(x_avg, .1, .95, -30, 30), clip(y_avg, .1, .85, 10, 140)]
+                #pos = [clip(z_avg, .1, .05, 0, 30), clip(x_avg, .1, .95, -30, 30), clip(y_avg, 0, 1, 10, 140)]
+                #print(30*(1-point.y), 60*(.5-point.x), point.z)
+                #pos = ','.join(map(str, pos))
+                try:
+                    self.control.move(x=pos[0], y=pos[1], z=pos[2])
+                except:
+                    print(pos)
+                # sleep(.025)
+                print(time() - start)
+                start = time()
+            img = cv2.flip(img, 1)
+            cv2.imshow("Image", img)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+
+def __main__():
+    h = HandTracking()
+    h.main()
