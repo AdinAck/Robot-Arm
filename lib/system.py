@@ -63,7 +63,8 @@ class System:
                     m.disconnect()
             except MotorException:
                 continue
-        
+    
+
         for d in comports():
             if str(d.device) not in ports_used:
                 try:
