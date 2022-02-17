@@ -5,8 +5,13 @@ import tkinter as tk
 from lib.app import Application
 from lib.system import System
 
-from typing import Optional
+from typing import Optional, Union, TypeVar
 
+T = TypeVar('T', float, int)
+
+def _clamp(value: Optional[T], m: Union[float, int], M: Union[float, int]) -> Optional[T]:
+    if value is not None:
+        return type(value)(min(max(value, m), M))
 
 class Control:
     """
@@ -95,7 +100,13 @@ class Control:
             The amount of error allowed before the move is considered complete.
         """
 
-        self._parent.update_targets(x=x, y=y, z=z, r=r, e=e)
+        self._parent.update_targets(
+            x=_clamp(x, 0, 30),
+            y=_clamp(y, -30, 30),
+            z=_clamp(z, 0, 140),
+            r=_clamp(r, -1.57, 1.57),
+            e=_clamp(e, 0, 100)
+        )
 
         t1, t2 = self._system.cartesian_to_dual_polar(
             self._parent.target_x_var.get(), self._parent.target_y_var.get()
