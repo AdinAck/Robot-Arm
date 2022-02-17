@@ -32,7 +32,7 @@ class System:
     motors: dict[int, Motor] = {}
     l1: float = 15.5
     l2: float = 15.25
-    minimum_radius: float = 10
+    minimum_radius: float = 15
 
     def __init__(self):
         """
@@ -126,6 +126,7 @@ class System:
         self.auto_calibrate(
             self.end_effector.m, voltage=6, speed=3
         )
+        self.end_effector.m.set_velocity_limit(12)
 
         try:
             with open('config/inner_rot', 'r') as f:

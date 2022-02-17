@@ -160,8 +160,3 @@ class HandTracking(Widget):
             cv2.imshow("Image", img)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-
-
-def __main__():
-    h = HandTracking()
-    h.main()
