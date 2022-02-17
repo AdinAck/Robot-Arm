@@ -29,6 +29,9 @@ def calc_avgs(point_indices, landmarks):
 # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # s.connect(("192.168.1.3",8080))
 def clip(x, a, b, c, d, do_round=True):
+    if c > d:
+        a, b = b, a
+        c, d = d, c
     out = (x - a) / (b-a) * (d-c) + c
     # clip out between c and d
     out = min(d, max(c, out))   
@@ -50,19 +53,17 @@ def calc_curve(landmarks):
             #print([vectors[-1]])
         last_lm = lm
 
-    last_lm = None
     dot_total = 0
-    for lm in vectors:
-        if last_lm is not None:
-            x, y, z = lm
-            lastx, lasty, lastz = last_lm
-            dot = x * lastx + y * lasty + z * lastz
-            print(dot)
-            this_mag = sqrt(x**2 + y**2 + z**2)
-            last_mag = sqrt(lastx**2 + lasty**2 + lastz**2)
+
+    for i in range(len(vectors)):
+        for j in range(i + 1, len(vectors)):
+            x1, y1, z1 = vectors[i]
+            x2, y2, z2 = vectors[j]
+            dot = x1 * x2 + y1 * y2 + z1 * z2
+            this_mag = sqrt(x1**2 + y1**2 + z1**2)
+            last_mag = sqrt(x2**2 + y2**2 + z2**2)
             fixed_dot = dot/this_mag/last_mag
             dot_total += fixed_dot
-        last_lm = lm
     return dot_total / (len(landmarks) - 1)
 
 
@@ -107,7 +108,8 @@ class HandTracking(Widget):
                 def calc_dist(lm1, lm2):
                     return sqrt((lm1.x - lm2.x)**2 + (lm1.y - lm2.y)**2 + (lm1.z - lm2.z)**2)
                 z = calc_dist(lm1, landmarks[5]) + calc_dist(lm1, landmarks[17])
-                curve = sum(calc_curve[landmarks[4*i + 5: 4*i+9]] for i in range(4)) / 4
+                curve = sum(calc_curve(landmarks[4*i + 5: 4*i+9]) for i in range(4)) / 4
+
 
                 if x_avg is None:
                     x_avg = x
@@ -141,17 +143,18 @@ class HandTracking(Widget):
                 #lookahead=0
                 #use_x, use_y, use_z = x_avg + x_vel_avg*lookahead, y_avg+y_vel_avg*lookahead, z_avg
                 
-
+                #print(curve)
                 pos = [clip(1/z_avg, 2, 5, 0, 30), clip(x_avg, .1, .95, -30, 30), clip(y_avg, .1, .85, 10, 140)]
+                curve = clip(curve, .2, 1, 100, 0)
                 #pos = [clip(z_avg, .1, .05, 0, 30), clip(x_avg, .1, .95, -30, 30), clip(y_avg, 0, 1, 10, 140)]
                 #print(30*(1-point.y), 60*(.5-point.x), point.z)
                 #pos = ','.join(map(str, pos))
                 try:
-                    self.control.move(x=pos[0], y=pos[1], z=pos[2])
+                    self.control.move(x=pos[0], y=pos[1], z=pos[2], e=curve)
                 except:
-                    print(pos)
+                    print('OOF')
                 # sleep(.025)
-                print(time() - start)
+                #print(time() - start)
                 start = time()
             img = cv2.flip(img, 1)
             cv2.imshow("Image", img)

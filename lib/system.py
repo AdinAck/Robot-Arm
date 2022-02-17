@@ -59,9 +59,12 @@ class System:
                 if 0 < m.m_id < 5:
                     self.motors[m.m_id] = m
                     ports_used.append(str(d.device))
+                else:
+                    m.disconnect()
             except MotorException:
                 continue
-        
+    
+
         for d in comports():
             if str(d.device) not in ports_used:
                 try:
