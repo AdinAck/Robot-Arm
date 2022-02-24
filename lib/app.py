@@ -40,12 +40,12 @@ class Application(ttk.Frame):
         from widgets.builtin.calibrationWizard import CalibrationWizard
         from widgets.builtin.configureMotors import ConfigureMotors
         from widgets.builtin.visual import Visual
-        from widgets.builtin.hand_tracking import HandTracking
+        # from widgets.builtin.hand_tracking import HandTracking
 
         self.calibration_wizard = CalibrationWizard(self)
         self.configureation_panel = ConfigureMotors(self)
         self.visual = Visual(self)
-        self.hand_tracking = HandTracking(self)
+        # self.hand_tracking = HandTracking(self)
 
     def init_system(self):
         self.system.load_motors()
@@ -70,8 +70,8 @@ class Application(ttk.Frame):
             label='Calibration Wizard', command=self.calibration_wizard.show
         )
         tools_menu.add_command(label='Visual', command=self.visual.show)
-        tools_menu.add_command(label='Hand Tracking',
-                               command=self.hand_tracking.show)
+        # tools_menu.add_command(label='Hand Tracking',
+        #                        command=self.hand_tracking.show)
         motor_menu.add_checkbutton(
             label='Enable',
             variable=self.motors_enabled_var,

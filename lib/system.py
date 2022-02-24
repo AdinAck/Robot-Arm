@@ -124,9 +124,9 @@ class System:
         self.single_ended_home(self.m_vertical, 140/2, -4)
         self.end_effector.enable()
         self.auto_calibrate(
-            self.end_effector.m, voltage=6, speed=3
+            self.end_effector.m, voltage=3, speed=3
         )
-        self.end_effector.m.set_velocity_limit(12)
+        # self.end_effector.m.set_velocity_limit(12)
 
         try:
             with open('config/inner_rot', 'r') as f:
