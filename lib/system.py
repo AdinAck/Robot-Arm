@@ -40,20 +40,9 @@ class System:
 
         Connect to all devices and configure motors.
         """
-
         ports_used = []
 
         for d in comports():
-            # if d.description == Motor.device_name:
-            #     # attach motors
-            #     m = Motor(str(d.device))
-            #     try:
-            #         self.motors[m.m_id] = m
-            #     except MotorException:
-            #         raise NotImplementedError('Unidentifiable motor.')
-            # elif d.description == EndEffector.deviceName:
-            #     # attach end effector
-            #     self.end_effector = EndEffector(str(d.device))
             try:
                 m = Motor(str(d.device))
                 if 0 < m.m_id < 5:
@@ -72,17 +61,23 @@ class System:
                     break
                 except EndEffectorException:
                     continue
-
+        
         try:
             self.m_vertical = self.motors[1]
             self.m_inner_rot = self.motors[2]
             self.m_outer_rot = self.motors[3]
             self.m_end_rot = self.motors[4]
         except KeyError:
-            raise NotImplementedError(
-                'A serial connection could not be established with at least one motor. '
+            msg = 'A serial connection could not be established with at least one motor. ' \
                 + f'Detected motor(s): {[id for id in self.motors]}'
-            )
+            raise Exception(msg)
+
+        try:
+            self.end_effector
+        except AttributeError:
+            msg = 'A serial connection could not be established with the end effector.'
+            raise Exception(msg)
+
 
         # All below should be somehow defined in a file or something
         # maybe defer to loadMotors?
@@ -92,6 +87,7 @@ class System:
             'z': self.m_vertical,
             'r': self.m_end_rot,
         }
+
 
         self.m_vertical.set_voltage_limit(12)
         self.m_vertical.set_PIDs('vel', 0.5, 20)
@@ -110,6 +106,7 @@ class System:
         self.m_end_rot.set_voltage_limit(12)
         self.m_end_rot.set_velocity_limit(12)
 
+
     def load_motors(self, onFail: Optional[Callable] = None):
         """
         Load motor calibration from disk.
@@ -121,12 +118,15 @@ class System:
         onFail: Optional[Callable]
             Callback for if files are not found or corrupted.
         """
+
+
         self.single_ended_home(self.m_vertical, 140/2, -4)
         self.end_effector.enable()
         self.auto_calibrate(
-            self.end_effector.m, voltage=3, speed=3
+            self.end_effector.m, voltage=2, speed=15, zeroSpeed=10
         )
-        # self.end_effector.m.set_velocity_limit(12)
+        self.end_effector.m.set_voltage_limit(6)
+        self.end_effector.m.set_velocity_limit(999)
 
         try:
             with open('config/inner_rot', 'r') as f:
@@ -150,8 +150,9 @@ class System:
             if onFail is not None:
                 onFail()
             else:
-                raise NotImplementedError(
-                    'Failed to load motor config from disk.')
+                msg = 'Failed to load motor config from disk.'
+                raise NotImplementedError()
+        
 
     def motors_enabled(self, value: bool):
         """
@@ -476,9 +477,9 @@ class System:
                 ):
                     break
             else:
-                raise NotImplementedError(
-                    'Motors did not reach target position in the allotted time.'
-                )
+                msg = 'Motors did not reach target position in the allotted time.'
+                raise NotImplementedError(msg)
 
         except MotorException:
-            raise NotImplementedError('Failed to smooth move.')
+            msg = 'Failed to smooth move.'
+            raise NotImplementedError(msg)

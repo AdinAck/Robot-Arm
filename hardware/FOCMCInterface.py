@@ -75,15 +75,19 @@ class Motor:
         MotorException
         """
         with self.lock:
-            self.ser.write(f'{cmd}\n'.encode())
-            r = self.ser.readline().decode().strip()
-            # print(self.m_id, cmd, r)
+            try:
+                self.ser.write(f'{cmd}\n'.encode())
+                r = self.ser.readline().decode().strip()
+            except SerialException:
+                msg = 'Motor disconnected. Cannot reestablish connection.'
+                raise NotImplementedError(msg)
+            
+            
             try:
                 return returnType(r)
             except ValueError:
-                raise MotorException(
-                    f'Received data could not be parsed as {returnType}. COM may be out of sync.\nCommand: {cmd}\nResponse: {r}\nMotor ID: {self.m_id}'
-                )
+                msg = f'Received data could not be parsed as {returnType}. COM may be out of sync.\nCommand: {cmd}\nResponse: {r}\nMotor ID: {self.m_id}'
+                raise MotorException(msg)
 
     def connect(self) -> None:
         """
@@ -94,8 +98,9 @@ class Motor:
         try:
             self.m_id = self._send_command('I', int)
         except SerialException:
-            raise NotImplementedError(
-                'Failed to initialize motor: SerialException.')
+            msg = 'Failed to initialize motor: SerialException.'
+            raise NotImplementedError(msg)
+        
 
     def disconnect(self) -> None:
         """
@@ -105,9 +110,9 @@ class Motor:
             self.disable()
             self.ser.close()
         except SerialException:
-            raise NotImplementedError(
-                'Failed to disconnect from motor: SerialException.'
-            )
+            msg = 'Failed to disconnect from motor: SerialException.'
+            raise NotImplementedError(msg)
+        
 
     @property
     def alive(self) -> bool:
@@ -119,7 +124,10 @@ class Motor:
         bool
             True if alive, False otherwise
         """
-        return self.ser.is_open
+
+        c = self.ser.is_open
+
+        return c
 
     @property
     def COM_precision(self) -> int:
@@ -131,7 +139,10 @@ class Motor:
         int
             Current COM precision
         """
-        return self._send_command('#', int)
+
+        c = self._send_command('#', int)
+
+        return c
 
     @property
     def enabled(self) -> bool:
@@ -143,7 +154,10 @@ class Motor:
         bool
             True if enabled, False if disabled
         """
-        return self._send_command('ME', bool)
+
+        c = self._send_command('ME', bool)
+
+        return c
 
     @property
     def position(self) -> float:
@@ -155,7 +169,10 @@ class Motor:
         float
             Current position
         """
-        return self._send_command('MMG6', float) - self.offset
+
+        c = self._send_command('MMG6', float) - self.offset
+
+        return c
 
     @property
     def velocity(self) -> float:
@@ -167,7 +184,10 @@ class Motor:
         float
             Current velocity
         """
-        return self._send_command('MMG5', float)
+
+        c = self._send_command('MMG5', float)
+
+        return c
 
     def set_COM_precision(self, decimals: int) -> None:
         """
@@ -182,11 +202,13 @@ class Motor:
         ------
         MotorException
         """
+
+
         assert 1 <= decimals <= 15, 'Decimal precision must be within the range [1,15].'
 
         if self._send_command(f'#{decimals}', float) != decimals:
-            raise MotorException(
-                'Failed to set COM precision: Mismatched confirmation message.')
+            msg = 'Failed to set COM precision: Mismatched confirmation message.'
+            raise MotorException(msg)
 
     def enable(self) -> None:
         """
@@ -319,9 +341,9 @@ class Motor:
             'velocity': 1,
             'angle': 2,
         }
-        if self._send_command(f'MC{d[mode]}', str)[:3] != mode[:3]:
+        if (x := self._send_command(f'MC{d[mode]}', str))[:3] != mode[:3]:
             raise MotorException(
-                'Failed to set control mode: Mismatched confirmation message.')
+                f'Failed to set control mode: Mismatched confirmation message. Received: {x}')
         else:
             self.control_mode = mode
 

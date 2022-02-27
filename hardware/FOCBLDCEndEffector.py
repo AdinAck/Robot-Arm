@@ -45,6 +45,6 @@ class FOCBLDC(EndEffector):
         try:
             # target ranges from 0-100
             # motor can move from -2.5-2.5
-            self.m.move((target-50)/20)
+            self.m.move(9*(target-50)/20)
         except MotorException:
             raise EndEffectorException('Could not move end effector.')

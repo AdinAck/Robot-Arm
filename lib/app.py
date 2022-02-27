@@ -9,7 +9,6 @@ import tkinter.ttk as ttk
 
 from typing import Optional
 
-
 class Application(ttk.Frame):
     system: System
 
