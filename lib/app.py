@@ -2,8 +2,10 @@ from threading import Thread
 
 from lib.system import System
 from lib.gcode import read_gcode_line
+from lib.widget import Widget
 
 import tkinter as tk
+from tkinter import messagebox
 from tkinter import filedialog as fd
 import tkinter.ttk as ttk
 
@@ -39,12 +41,24 @@ class Application(ttk.Frame):
         from widgets.builtin.calibrationWizard import CalibrationWizard
         from widgets.builtin.configureMotors import ConfigureMotors
         from widgets.builtin.visual import Visual
-        from widgets.builtin.hand_tracking import HandTracking
+        try:
+            from widgets.builtin.hand_tracking import HandTracking
+        except:
+            messagebox.showwarning('Failed to initialize hand tracking widget.')
 
         self.calibration_wizard = CalibrationWizard(self)
         self.configureation_panel = ConfigureMotors(self)
         self.visual = Visual(self)
-        self.hand_tracking = HandTracking(self)
+        # self.hand_tracking = HandTracking(self)
+
+        # Initialize third-party widgets
+        with open('widgets/registry.txt', 'r') as f:
+            for name in f.readlines():
+                name = name.strip()
+                exec(f'from widgets.third-party import {name}')
+                cls_names = [c for c in eval(f'dir({name})') if isinstance(getattr(eval(name), c), Widget)]
+                for cls_name in cls_names:
+                    exec(f'self.{cls_name} = {name}.{cls_name}')
 
     def init_system(self):
         self.system.load_motors()
@@ -69,8 +83,8 @@ class Application(ttk.Frame):
             label='Calibration Wizard', command=self.calibration_wizard.show
         )
         tools_menu.add_command(label='Visual', command=self.visual.show)
-        tools_menu.add_command(label='Hand Tracking',
-                               command=self.hand_tracking.show)
+        # tools_menu.add_command(label='Hand Tracking',
+        #                        command=self.hand_tracking.show)
         motor_menu.add_checkbutton(
             label='Enable',
             variable=self.motors_enabled_var,

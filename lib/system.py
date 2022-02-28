@@ -3,6 +3,8 @@ from serial.tools.list_ports import comports
 from time import time, sleep
 from typing import Optional, Callable
 
+from tkinter import messagebox
+
 from hardware.FOCMCInterface import Motor, MotorException
 from hardware.EndEffector import EndEffectorException
 from hardware.FOCBLDCEndEffector import FOCBLDC as EndEffector
@@ -70,13 +72,15 @@ class System:
         except KeyError:
             msg = 'A serial connection could not be established with at least one motor. ' \
                 + f'Detected motor(s): {[id for id in self.motors]}'
-            raise Exception(msg)
+            messagebox.showerror(__name__, msg)
+            raise
 
         try:
             self.end_effector
         except AttributeError:
             msg = 'A serial connection could not be established with the end effector.'
-            raise Exception(msg)
+            messagebox.showerror(__name__, msg)
+            raise
 
 
         # All below should be somehow defined in a file or something
@@ -478,8 +482,10 @@ class System:
                     break
             else:
                 msg = 'Motors did not reach target position in the allotted time.'
+                messagebox.showwarning(__name__, msg)
                 raise NotImplementedError(msg)
 
         except MotorException:
             msg = 'Failed to smooth move.'
+            messagebox.showwarning(__name__, msg)
             raise NotImplementedError(msg)
