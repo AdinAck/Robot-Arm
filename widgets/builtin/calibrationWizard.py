@@ -1,5 +1,6 @@
 from threading import Thread
 import tkinter.ttk as ttk
+from tkinter import messagebox
 from hardware.FOCMCInterface import MotorException
 
 from lib.widget import Widget
@@ -283,7 +284,9 @@ Click continue to begin.""",
         self.control._system.m_vertical.enable()
 
     def failed(self):
-        raise NotImplementedError('Calibration wizard failed.')
+        msg = 'Calibration wizard failed.'
+        messagebox.showwarning(__name__, msg)
+        raise NotImplementedError()
 
     def close(self):
         self.control._system.motors_enabled(True)
