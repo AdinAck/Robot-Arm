@@ -126,7 +126,7 @@ class System:
             self.end_effector.m, voltage=2, speed=15, zeroSpeed=10
         )
         self.end_effector.m.set_voltage_limit(6)
-        self.end_effector.m.set_velocity_limit(20)
+        self.end_effector.m.set_velocity_limit(999)
 
         try:
             with open('config/inner_rot', 'r') as f:

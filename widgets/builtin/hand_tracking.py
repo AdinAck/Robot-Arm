@@ -1,4 +1,5 @@
 from threading import Thread
+import zipfile
 from lib.widget import Widget
 
 import cv2
@@ -77,10 +78,10 @@ class HandTracking(Widget):
     def main(self):
         num_attrs = 4
         avgs = [None] * num_attrs
-        avg_factors = [.5] * num_attrs
+        avg_factors = [.7] * num_attrs
         last_moves = [0] * num_attrs
         master_pos = [-999] * num_attrs
-        sensitivity = [.15, .3, .65, 10] * num_attrs
+        sensitivity = [.15, .3, .65, 1] * num_attrs
 
         x_avg, y_avg, z_avg = None, None, None
         curve_avg = None
@@ -126,8 +127,11 @@ class HandTracking(Widget):
                         return sqrt((lm1.x - lm2.x)**2 + (lm1.y - lm2.y)**2 + (lm1.z - lm2.z)**2)
                     z = calc_dist(lm1, landmarks[5]) + calc_dist(lm1, landmarks[17])
                     curve = sum(calc_curve(landmarks[4*i + 5: 4*i+9]) for i in range(4)) / 4
+
+                    top_ys = sum(landmarks[i*4+8].y for i in range(4)) / 4
+
                     thumb_curve = calc_curve([landmarks[0], landmarks[1], landmarks[2]])
-                    print(curve)
+                    #print(curve)
                     #print(thumb_curve)
                     full_pos = [x, y, z, curve] #this is the position in the latent space
                     full_pos = [clip(1/z, 2, 5, 0, 30), clip(x, .1, .95, -30, 30),
