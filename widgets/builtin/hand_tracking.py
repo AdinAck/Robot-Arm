@@ -78,10 +78,11 @@ class HandTracking(Widget):
     def main(self):
         num_attrs = 4
         avgs = [None] * num_attrs
-        avg_factors = [.7] * num_attrs
+        avg_factors = [.3] * num_attrs
         last_moves = [0] * num_attrs
         master_pos = [-999] * num_attrs
-        sensitivity = [.15, .3, .65, 1] * num_attrs
+        #sensitivity = [.15, .3, .65, 1, 0]
+        sensitivity = [0] * 10
 
         x_avg, y_avg, z_avg = None, None, None
         curve_avg = None
