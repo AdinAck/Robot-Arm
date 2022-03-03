@@ -131,6 +131,8 @@ class HandTracking(Widget):
                     top_ys = sum(landmarks[i*4+8].y for i in range(4)) / 4
 
                     thumb_curve = calc_curve([landmarks[0], landmarks[1], landmarks[2]])
+                    thumb_height = (landmarks[4].y - landmarks[0].y)/z
+                    print(thumb_height)
                     #print(curve)
                     #print(thumb_curve)
                     full_pos = [x, y, z, curve] #this is the position in the latent space
@@ -177,9 +179,10 @@ class HandTracking(Widget):
                     #pos = [clip(z_avg, .1, .05, 0, 30), clip(x_avg, .1, .95, -30, 30), clip(y_avg, 0, 1, 10, 140)]
                     #print(30*(1-point.y), 60*(.5-point.x), point.z)
                     #pos = ','.join(map(str, pos))
+                    rot = clip(thumb_height, -.4, -.6, -.5, .5)
                     try:
                         self.control.move(x=master_pos[0], y=master_pos[1],
-                            z=master_pos[2], e=master_pos[3])
+                            z=master_pos[2], e=master_pos[3], r=rot)
                     except:
                         print('OOF')
                     # sleep(.025)
