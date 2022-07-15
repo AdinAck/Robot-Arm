@@ -1,6 +1,7 @@
 from threading import Thread
+from abc import ABCMeta
 
-from lib.system import System
+from lib.system import System, JogError
 from lib.gcode import read_gcode_line
 
 import tkinter as tk
@@ -23,18 +24,16 @@ class Application(ttk.Frame):
         self.motors_enabled_var = tk.BooleanVar()
         self.motors_enabled_var.set(True)
 
-        self.init_popup = tk.Toplevel(self)
-        self.init_popup.geometry('500x100')
-        self.init_popup.protocol('WM_DELETE_WINDOW', lambda: None)
-        ttk.Label(self.init_popup, text='Initializing...').pack(side='top')
+        # self.init_popup = tk.Toplevel(self)
+        # self.init_popup.geometry('500x100')
+        # self.init_popup.protocol('WM_DELETE_WINDOW', lambda: None)
+        # ttk.Label(self.init_popup, text='Initializing...').pack(side='top')
 
-        progress_bar = ttk.Progressbar(
-            self.init_popup, mode='indeterminate', value=1)
-        progress_bar.pack(fill='x', expand=1, side='bottom', padx=10, pady=10)
+        # progress_bar = ttk.Progressbar(
+        #     self.init_popup, mode='indeterminate', value=1)
+        # progress_bar.pack(fill='x', expand=1, side='bottom', padx=10, pady=10)
 
-        # Initialize Up Robot Arm
         self.system = System()
-        Thread(target=self.init_system, daemon=True).start()
 
         # Initialize first-party widgets
         from widgets.builtin.calibrationWizard import CalibrationWizard
@@ -49,22 +48,33 @@ class Application(ttk.Frame):
         self.configureation_panel = ConfigureMotors(self)
         self.visual = Visual(self)
         self.hand_tracking = HandTracking(self)
+        self.third_party = []
+
+        # Initialize Up Robot Arm
+        Thread(target=self.init_system, daemon=True).start()
 
         from lib.widget import Widget
+        import os
 
         # Initialize third-party widgets
-        # with open('widgets/registry.txt', 'r') as f:
-        #     for name in f.readlines():
-        #         name = name.strip()
-        #         exec(f'from widgets.third_party import {name}')
-        #         print(getattr(eval(name), '__name__'))
-        #         cls_names = [c for c in eval(f'dir({name})') if isinstance(getattr(eval(name), c), Widget)]
-        #         for cls_name in cls_names:
-        #             exec(f'self.{cls_name} = {name}.{cls_name}')
+        
+        files = os.listdir('widgets/third_party')
 
+        for name in files:
+            name = name.strip().split('.')[0]
+            exec(f'from widgets.third_party import {name}')
+            module = eval(f'{name}')
+            attrs = dir(module)
+
+            cls_names = [c for c in attrs if type((attr := getattr(module, c))) == ABCMeta and issubclass(attr, Widget) and attr != Widget]
+            for cls_name in cls_names:
+                _cls = eval(f'module.{cls_name}')
+                exec(f'self.{cls_name} = _cls(self)')
+                self.third_party.append(_cls)
+        
     def init_system(self):
-        self.system.load_motors()
-        self.init_popup.destroy()
+        self.system.load_motors(self.calibration_wizard.show)
+        # self.init_popup.destroy()
         self.create_widgets()
 
     def create_widgets(self):
@@ -72,6 +82,7 @@ class Application(ttk.Frame):
         menubar = tk.Menu(self)
         file_menu = tk.Menu(menubar, tearoff=0)
         tools_menu = tk.Menu(menubar, tearoff=0)
+        third_party_menu = tk.Menu(menubar, tearoff=0)
         motor_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label='File', menu=file_menu)
         menubar.add_cascade(label='Tools', menu=tools_menu)
@@ -87,6 +98,11 @@ class Application(ttk.Frame):
         tools_menu.add_command(label='Visual', command=self.visual.show)
         tools_menu.add_command(label='Hand Tracking',
                                command=self.hand_tracking.show)
+        tools_menu.add_cascade(label='Third-party', menu=third_party_menu)
+
+        for i, _cls in enumerate(self.third_party):
+            third_party_menu.add_command(label=_cls.__name__, command=eval(f'self.{_cls.__name__}.show'))
+
         motor_menu.add_checkbutton(
             label='Enable',
             variable=self.motors_enabled_var,
@@ -101,12 +117,14 @@ class Application(ttk.Frame):
         r = 0
         self.control_frame = ttk.Frame(self)
         self.control_frame.pack(side='left', fill='both', expand=True)
+        self.control_frame.columnconfigure(0, weight=1)
 
         # Inside of Control_Frame
         r, c = 0, 0
 
         slider_frame = ttk.Frame(self.control_frame)
         slider_frame.grid(row=r, column=c, sticky='WE')
+        slider_frame.columnconfigure(2, weight=1)
 
         r += 1
 
@@ -150,7 +168,7 @@ class Application(ttk.Frame):
             to=30,
             orient='horizontal',
         )
-        self.target_x_slider.grid(row=r, column=2, padx=5)
+        self.target_x_slider.grid(row=r, column=2, padx=5, sticky="WE")
 
         r += 1
 
@@ -174,12 +192,12 @@ class Application(ttk.Frame):
             to=30,
             orient='horizontal',
         )
-        self.target_y_slider.grid(row=r, column=2, padx=5)
+        self.target_y_slider.grid(row=r, column=2, padx=5, sticky="WE")
 
         r += 1
 
         self.target_z_var = tk.DoubleVar()
-        self.target_z_var.set(140/2)
+        self.target_z_var.set(160/2)
         self.target_z_label = ttk.Label(slider_frame, text='Target Z:')
         self.target_z_label.grid(row=r, padx=5)
 
@@ -199,7 +217,7 @@ class Application(ttk.Frame):
             to=140,
             orient='horizontal',
         )
-        self.target_z_slider.grid(row=r, column=2, padx=5)
+        self.target_z_slider.grid(row=r, column=2, padx=5, sticky="WE")
 
         r += 1
 
@@ -223,7 +241,7 @@ class Application(ttk.Frame):
             to=1.57,
             orient='horizontal',
         )
-        self.target_r_slider.grid(row=r, column=2, padx=5)
+        self.target_r_slider.grid(row=r, column=2, padx=5, sticky="WE")
 
         r += 1
 
@@ -257,7 +275,7 @@ class Application(ttk.Frame):
             to=self.system.end_effector.value_range[1],
             orient='horizontal',
         )
-        self.target_e_slider.grid(row=r, column=2, padx=5)
+        self.target_e_slider.grid(row=r, column=2, padx=5, sticky="WE")
 
         r += 1
 
@@ -279,7 +297,7 @@ class Application(ttk.Frame):
 
         self.jog_button = ttk.Button(
             slider_frame, text='Jog', command=lambda: Thread(target=self.jog, daemon=True).start())
-        self.jog_button.grid(row=r, column=2, padx=5, pady=5)
+        self.jog_button.grid(row=r, column=2, padx=5, pady=5, sticky="W")
 
         r += 1
 
@@ -315,23 +333,37 @@ class Application(ttk.Frame):
             filetypes=[('GCode', '*.gcode')],
         )
 
+        if not file_name:
+            return
+
         self.job_popup = tk.Toplevel(self)
         self.job_popup.geometry('500x100')
         self.job_popup.protocol('WM_DELETE_WINDOW', lambda: None)
         ttk.Label(self.job_popup, text='Running Job').pack(side='top')
         progress = 0
         progress_var = tk.IntVar()
+        self.job_abort = False
 
         self.realtime_var.set(False)
 
+        def terminator(self):
+            self.job_abort = True
+
         with open(file_name, 'r') as f:
             lines = f.readlines()
+
+            abort_btn = ttk.Button(self.job_popup, text='Abort', command=lambda: terminator(self))
+            abort_btn.pack(side='bottom', padx=10, pady=10)
+
             progress_bar = ttk.Progressbar(
                 self.job_popup, variable=progress_var, length=500, maximum=len(lines)
             )
             progress_bar.pack(fill='x', expand=1,
                               side='bottom', padx=10, pady=10)
+
             for line in lines:
+                if self.job_abort: break
+
                 for argument, value in read_gcode_line(line):
                     if argument == 'X':
                         self.target_x_var.set(value)
@@ -345,7 +377,11 @@ class Application(ttk.Frame):
                         self.target_e_var.set(int(value))
                     elif argument == 'D':
                         self.move_duration_var.set(value)
-                self.jog()
+                try:
+                    self.jog()
+                except JogError:
+                    self.job_popup.destroy()
+                    return
                 progress += 1
                 progress_var.set(progress)
 

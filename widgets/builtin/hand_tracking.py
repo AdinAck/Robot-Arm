@@ -138,7 +138,7 @@ class HandTracking(Widget):
                     #print(thumb_curve)
                     full_pos = [x, y, z, curve] #this is the position in the latent space
                     full_pos = [clip(1/z, 2, 5, 0, 30), clip(x, .1, .95, -30, 30),
-                        clip(y, .1, .85, 10, 140), clip(curve, -.3, 1, 0, 100)]
+                        clip(y, .1, .85, 10, 160), clip(curve, -.3, 1, 0, 100)]
 
                     if avgs[0] is None:
                         avgs = full_pos
@@ -177,7 +177,7 @@ class HandTracking(Widget):
                     #master_pos = full_pos
                     
 
-                    #pos = [clip(z_avg, .1, .05, 0, 30), clip(x_avg, .1, .95, -30, 30), clip(y_avg, 0, 1, 10, 140)]
+                    #pos = [clip(z_avg, .1, .05, 0, 30), clip(x_avg, .1, .95, -30, 30), clip(y_avg, 0, 1, 10, 160)]
                     #print(30*(1-point.y), 60*(.5-point.x), point.z)
                     #pos = ','.join(map(str, pos))
                     rot = clip(thumb_height, -.4, -.6, -.5, .5)

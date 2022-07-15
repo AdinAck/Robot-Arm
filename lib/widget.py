@@ -72,7 +72,7 @@ class Control:
 
     def move(self, *args: str,
              x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None, r: Optional[float] = None, e: Optional[int] = None,
-             duration: Optional[float] = None, timeout: float = None, epsilon: float = None):
+             duration: float = 2, timeout: float = 5, epsilon: float = 0.1):
         """
         Perform a movement to the target position.
 
@@ -103,7 +103,7 @@ class Control:
         self._parent.update_targets(
             x=_clamp(x, 0, 30),
             y=_clamp(y, -30, 30),
-            z=_clamp(z, 0, 140),
+            z=_clamp(z, 0, 160),
             r=_clamp(r, -1.57, 1.57),
             e=_clamp(e, 0, 100)
         )
@@ -116,13 +116,8 @@ class Control:
         e = self._parent.target_e_var.get()
 
         if 'smooth' in args:
-            assert duration is not None, 'Duration must be specified for smooth move.'
             assert duration > 0, 'Duration must be greater than 0.'
-
-            assert timeout is not None, 'Timeout must be specified for smooth move.'
             assert timeout > 0, 'Timeout must be greater than 0.'
-
-            assert epsilon is not None, 'Epsilon must be specified for smooth move.'
             assert epsilon > 0, 'Epsilon must be greater than 0.'
 
             self._system.smooth_move(

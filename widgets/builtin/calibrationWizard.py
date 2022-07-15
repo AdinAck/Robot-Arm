@@ -1,3 +1,5 @@
+import os
+import os.path
 from threading import Thread
 import tkinter.ttk as ttk
 from tkinter import messagebox
@@ -16,6 +18,10 @@ class CalibrationWizard(Widget):
         self.geometry('400x400')
 
         self.control._system.motors_enabled(False)
+
+        if not os.path.exists('config'):
+            os.mkdir('config')
+
         self.step1()
 
     def step1(self):

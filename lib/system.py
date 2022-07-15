@@ -1,4 +1,6 @@
 import math
+import os.path
+import serial
 from serial.tools.list_ports import comports
 from time import time, sleep
 from typing import Optional, Callable
@@ -11,6 +13,8 @@ from hardware.FOCBLDCEndEffector import FOCBLDC as EndEffector
 
 from lib.bezier import bezier
 
+class JogError(Exception):
+    ...
 
 class System:
     """
@@ -483,9 +487,9 @@ class System:
             else:
                 msg = 'Motors did not reach target position in the allotted time.'
                 messagebox.showwarning(__name__, msg)
-                raise NotImplementedError(msg)
+                raise JogError(msg)
 
         except MotorException:
             msg = 'Failed to smooth move.'
             messagebox.showwarning(__name__, msg)
-            raise NotImplementedError(msg)
+            raise JogError(msg)
