@@ -7,9 +7,9 @@ from typing import Optional, Callable
 
 from tkinter import messagebox
 
-from hardware.FOCMCInterface import Motor, MotorException
-from hardware.EndEffector import EndEffectorException
-from hardware.FOCBLDCEndEffector import FOCBLDC as EndEffector
+from hardware.FOCMC_interface import Motor, MotorException
+from hardware.end_effector import EndEffectorException
+from hardware.FOC_BLDC_end_effector import FOCBLDC as EndEffector
 
 from lib.bezier import bezier
 
@@ -111,7 +111,7 @@ class System:
         self.m_outer_rot.set_PIDs('vel', 0.6, 20, F=0.01)
         self.m_outer_rot.set_PIDs('angle', 20, D=3, R=100, F=0.01)
 
-        self.m_end_rot.set_voltage_limit(12)
+        self.m_end_rot.set_voltage_limit(3)
         self.m_end_rot.set_velocity_limit(12)
 
 

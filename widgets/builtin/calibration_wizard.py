@@ -3,7 +3,7 @@ import os.path
 from threading import Thread
 import tkinter.ttk as ttk
 from tkinter import messagebox
-from hardware.FOCMCInterface import MotorException
+from hardware.FOCMC_interface import MotorException
 
 from lib.widget import Widget
 

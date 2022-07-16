@@ -14,8 +14,8 @@ from typing import Optional
 class Application(ttk.Frame):
     system: System
 
-    def __init__(self, master):
-        ttk.Frame.__init__(self, master)
+    def __init__(self, master: tk.Tk):
+        super().__init__(master)
         self.root = master
         self.pack(fill='both', expand=True)
 
@@ -36,8 +36,8 @@ class Application(ttk.Frame):
         self.system = System()
 
         # Initialize first-party widgets
-        from widgets.builtin.calibrationWizard import CalibrationWizard
-        from widgets.builtin.configureMotors import ConfigureMotors
+        from widgets.builtin.calibration_wizard import CalibrationWizard
+        from widgets.builtin.configure_motors import ConfigureMotors
         from widgets.builtin.visual import Visual
         try:
             from widgets.builtin.hand_tracking import HandTracking

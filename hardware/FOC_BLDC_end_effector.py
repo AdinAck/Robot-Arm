@@ -1,5 +1,5 @@
-from .FOCMCInterface import Motor, MotorException
-from .EndEffector import EndEffector, EndEffectorException
+from .FOCMC_interface import Motor, MotorException
+from .end_effector import EndEffector, EndEffectorException
 
 
 class FOCBLDC(EndEffector):

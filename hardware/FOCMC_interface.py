@@ -5,11 +5,14 @@ https://github.com/AdinAck/Motor-Controller
 Adin Ackerman
 """
 
-from threading import Lock
+from threading import Lock, Condition
 from itertools import chain
 from serial import Serial
 from serial.serialutil import SerialException
-from typing import Literal, Any
+from datetime import datetime
+from typing import Literal, Any, Optional
+
+from lib.utils import threaded_callback
 
 
 class MotorException(Exception):
@@ -37,6 +40,9 @@ class Motor:
     m_id: int = -1
     offset: float = 0
     control_mode: Literal['torque', 'velocity', 'angle'] = 'torque'
+    log: list[tuple[str, str, str]]
+    LOG_SIZE: int = 100
+    log_informer: Condition = Condition()
 
     def __init__(self, port: str) -> None:
         """
@@ -52,10 +58,20 @@ class Motor:
         self.port = port
         self.ser = Serial(baudrate=9600, timeout=1)
         self.lock = Lock()
+        self.log = []
 
         self.connect()
 
-    def _send_command(self, cmd: str, returnType: type) -> Any:
+    @threaded_callback
+    def _log_entry(self, command: str, response: str) -> None:
+        if len(self.log) > self.LOG_SIZE:
+            self.log.pop(0)
+        
+        self.log.append((datetime.now().strftime('%H:%M:%S'), command, response))
+        with self.log_informer:
+            self.log_informer.notify()
+
+    def _send_command(self, cmd: str, return_type: Optional[type] = None) -> Any:
         """
         Send a command to the motor
         *Intended for internal use only*
@@ -78,16 +94,19 @@ class Motor:
             try:
                 self.ser.write(f'{cmd}\n'.encode())
                 r = self.ser.readline().decode().strip()
+                self._log_entry(cmd, r)
             except SerialException:
                 msg = 'Motor disconnected. Cannot reestablish connection.'
                 raise NotImplementedError(msg)
             
-            
-            try:
-                return returnType(r)
-            except ValueError:
-                msg = f'Received data could not be parsed as {returnType}. COM may be out of sync.\nCommand: {cmd}\nResponse: {r}\nMotor ID: {self.m_id}'
-                raise MotorException(msg)
+            if return_type is not None:
+                try:
+                    return return_type(r)
+                except ValueError:
+                    msg = f'Received data could not be parsed as {return_type}. COM may be out of sync.\nCommand: {cmd}\nResponse: {r}\nMotor ID: {self.m_id}'
+                    raise MotorException(msg)
+            else:
+                print(f'[WARNING] [{__name__}] Motor response verification disabled.')
 
     def connect(self) -> None:
         """
