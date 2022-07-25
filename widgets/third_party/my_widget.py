@@ -20,5 +20,5 @@ class MyWidget(Widget):
         self.button.pack(padx=10, pady=10) # pack button
 
     # just a regular old function that we want the button to execute
-    def _callback(self):
+    def _callback(self) -> None:
         self.control.move('smooth', x=0, y=20) # move the arm to 0, 20, z=0, r=0, e=0

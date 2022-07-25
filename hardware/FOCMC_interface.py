@@ -29,24 +29,41 @@ class Motor:
         Serial object
     port: str
         Serial port
-    id: int
+    m_id: int
         Motor ID for multi-motor systems
     offset: float
         The offset angle of the motor
-    lock: Lock
-        Thread lock for serial calls
+    control_mode: Literal['torque', 'velocity', 'angle'] = 'torque'
+        The control mode of the motor
+    log: list[tuple[str, str, str]]
+        Log of given motor commands and responses up to size LOG_SIZE
+    LOG_SIZE: int = 100
+        Maximum size of the log
+    log_informer: Condition = Condition()
+        Condition object for signaling when log is updated
     """
-    device_name: str = 'Adafruit Feather M0'
+    ser: Serial = Serial(baudrate=9600, timeout=1)
+    port: str
     m_id: int = -1
     offset: float = 0
     control_mode: Literal['torque', 'velocity', 'angle'] = 'torque'
     log: list[tuple[str, str, str]]
     LOG_SIZE: int = 100
     log_informer: Condition = Condition()
+    
+    _device_name: str = 'Adafruit Feather M0'
+    _lock: Lock = Lock()
+
+    @property
+    def device_name(self) -> str:
+        """
+        USB device name
+        """
+        return self._device_name
 
     def __init__(self, port: str) -> None:
         """
-        Initialize Motor object.
+        Initialize Motor object
 
         *Serial port assertation occurs in connect()
 
@@ -56,18 +73,28 @@ class Motor:
             Serial port to connect to
         """
         self.port = port
-        self.ser = Serial(baudrate=9600, timeout=1)
-        self.lock = Lock()
         self.log = []
 
         self.connect()
 
     @threaded_callback
-    def _log_entry(self, command: str, response: str) -> None:
+    def _log_entry(self, cmd: str, resp: str) -> None:
+        """
+        Add an entry to the log
+        *Intended for internal use only*
+        
+        Parameters
+        ----------
+        cmd: str
+            Command sent to motor
+        resp: str
+            Response from motor
+        """
+        
         if len(self.log) > self.LOG_SIZE:
             self.log.pop(0)
         
-        self.log.append((datetime.now().strftime('%H:%M:%S'), command, response))
+        self.log.append((datetime.now().strftime('%H:%M:%S'), cmd, resp))
         with self.log_informer:
             self.log_informer.notify()
 
@@ -90,7 +117,7 @@ class Motor:
         ------
         MotorException
         """
-        with self.lock:
+        with self._lock:
             try:
                 self.ser.write(f'{cmd}\n'.encode())
                 r = self.ser.readline().decode().strip()

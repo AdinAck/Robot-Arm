@@ -21,7 +21,7 @@ class ThreadedWidget(Widget):
 
     # a callback function that is executed in a separate thread
     @threaded_callback
-    def _callback(self):
+    def _callback(self) -> None:
         self.button.config(text='Working...') # change the button text
         self.button.config(state='disabled')  # disable the button
 
