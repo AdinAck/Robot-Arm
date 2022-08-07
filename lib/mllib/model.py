@@ -3,6 +3,8 @@ import torch.functional as F
 from torch.distributions import Normal
 import torch.nn as nn
 
+LOG_SIG_MAX = 2
+LOG_SIG_MIN = -20
 epsilon = 1e-6
 
 
@@ -28,6 +30,7 @@ class Actor(nn.Module):
 
         mean = self.mean_l(state)
         std = self.std_l(state)
+        std = torch.clamp(std, LOG_SIG_MIN, LOG_SIG_MAX)
 
         return mean, std
 

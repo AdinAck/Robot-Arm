@@ -201,7 +201,7 @@ class Train(Widget):
         agent = SAC(state_size, args)
         memory = Replay(25000)
         writer = SummaryWriter()
-        start_steps = 10000
+        start_steps = 5000
         total_steps = 0
         updates = 0
         with Env(self.control._system) as env:
@@ -222,9 +222,9 @@ class Train(Widget):
                         c1_loss, c2_loss, a_loss = agent.update_model(
                             memory, args["batch_size"], updates
                         )
-                        writer.add_scalar('loss/critic1', c1_loss, updates)
-                        writer.add_scalar('loss/critic2', c2_loss, updates)
-                        writer.add_scalar('loss/actor', a_loss, updates)
+                        writer.add_scalar("loss/critic1", c1_loss, updates)
+                        writer.add_scalar("loss/critic2", c2_loss, updates)
+                        writer.add_scalar("loss/actor", a_loss, updates)
                         updates += 1
 
                     print(action, total_steps)
