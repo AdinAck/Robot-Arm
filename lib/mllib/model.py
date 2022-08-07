@@ -33,13 +33,15 @@ class Actor(nn.Module):
 
     def sample(self, state):
         mean, std = self.forward(state)
+        # print(mean, std)
+        std = std.exp()
         normal = Normal(mean, std)
         x_t = normal.rsample()
         y_t = torch.tanh(x_t)
 
         action = y_t * self.max_torque
 
-        log_prob = normal.log_prob()
+        log_prob = normal.log_prob(x_t)
         log_prob -= torch.log(
             self.max_torque * (1 - y_t.pow(2)) + epsilon
         )  # not sure why i need this but i do i think
@@ -55,7 +57,7 @@ class QNetwork(nn.Module):
         super().__init__()
 
         self.q1 = nn.Sequential(
-            nn.Linear(state_size + 1, 256),
+            nn.Linear(state_size + 2, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),
@@ -63,7 +65,7 @@ class QNetwork(nn.Module):
         )
 
         self.q2 = nn.Sequential(
-            nn.Linear(state_size + 1, 256),
+            nn.Linear(state_size + 2, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),

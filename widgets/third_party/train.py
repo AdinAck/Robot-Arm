@@ -9,13 +9,14 @@ import numpy as np
 from typing import Tuple
 import torch
 import torch.nn as nn
-import torch.functional as F
 import torch.optim as optim
 from lib.mllib.model import Actor, QNetwork, VNetwork
 from lib.mllib.replay_memory import Replay
+from torch.utils.tensorboard import SummaryWriter
 
 from hardware.FOCMC_interface import Motor
 from lib.system import System
+from lib.utils import threaded_callback
 from lib.widget import Widget
 
 
@@ -52,7 +53,7 @@ class Env:
 
         return self
 
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_value, exc_traceback):
         self.m1.set_control_mode("angle")
         self.m2.set_control_mode("angle")
         self.m1.move(0)
@@ -67,13 +68,13 @@ class Env:
         v3 = self.m3.velocity
 
         self.x, self.y = self.system.polar_to_cartesian(p1, p2)
-        target_p1, target_p2 = self.system.cartesian_to_dual_polar(self.x, self.y)
+        target_p1, target_p2 = self.system.cartesian_to_dual_polar(*self.target)
 
         return p1, v1, p2, v2, p3, v3, target_p1, target_p2
 
     def step(self, t1: float, t2: float, timeout=5) -> tuple:
-        self.m1.move(t1)
-        self.m2.move(t2)
+        self.m1.move(round(t1, 3))
+        self.m2.move(round(t2, 3))
 
         self.state = self.fetch()
         self.reward = self.get_reward()
@@ -100,6 +101,9 @@ class Env:
         return 1 if self.distance < epsilon else 0
 
     def reset(self):
+        self.m1.move(0)
+        self.m2.move(0)
+
         t1 = random() * 4 - 2
         t2 = random() * 4 - 2
 
@@ -136,7 +140,7 @@ class SAC:
             _, _, action = self.actor.sample(state)
         else:
             action, _, _ = self.actor.sample(state)
-        return action.cpu().detach().numpy()
+        return action.cpu().squeeze().detach().numpy()
 
     def update_model(self, memory: Replay, batch_size, updates):
         states, actions, rewards, next_states, dones = memory.sample(batch_size)
@@ -147,14 +151,15 @@ class SAC:
         next_states = torch.Tensor(next_states).to(self.device)
         dones = torch.Tensor(dones).to(self.device).unsqueeze(1)
 
-        with torch.no_grad:
+        with torch.no_grad():
             next_action, next_log_pi, _ = self.actor.sample(next_states)
             next_qf1, next_qf2 = self.critic_target(next_states, next_action)
-            next_qf = min(next_qf1, next_qf2) - self.alpha * next_log_pi
+            # print(torch.min(next_qf1, next_qf2))
+            next_qf = torch.min(next_qf1, next_qf2) - self.alpha * next_log_pi
             next_q = rewards + dones * self.gamma * next_qf
         qf1, qf2 = self.critic(states, actions)
-        qf1_loss = F.mse_loss(qf1, next_q)
-        qf2_loss = F.mse_loss(qf2, next_q)
+        qf1_loss = nn.MSELoss()(qf1, next_q)
+        qf2_loss = nn.MSELoss()(qf2, next_q)
         qf_loss = qf1_loss + qf2_loss
 
         self.critic_optim.zero_grad()
@@ -162,7 +167,8 @@ class SAC:
         self.critic_optim.step()
 
         pi, log_pi, _ = self.actor.sample(states)
-        qf_pi = self.critic(states, pi)
+        qf1_pi, qf2_pi = self.critic(states, pi)
+        qf_pi = torch.min(qf1_pi, qf2_pi)
         actor_loss = (
             (self.alpha * log_pi) - qf_pi
         ).mean()  # Jπ = 𝔼st∼D,εt∼N[α * logπ(f(εt;st)|st) − Q(st,f(εt;st))]
@@ -181,18 +187,20 @@ class Train(Widget):
     def setup(self):
         ttk.Button(self, text="Train", command=self.train).pack(padx=10, pady=10)
 
+    @threaded_callback
     def train(self):
         args = {
             "alpha": 0.2,
             "gamma": 0.99,
             "update_interval": 1,
-            "max_torque": 12,
+            "max_torque": 6,
             "batch_size": 64,
         }
 
         state_size = 8
         agent = SAC(state_size, args)
         memory = Replay(25000)
+        writer = SummaryWriter()
         start_steps = 10000
         total_steps = 0
         updates = 0
@@ -202,9 +210,10 @@ class Train(Widget):
                 episode_steps = 0
                 done = False
                 state = env.reset()
+                self.control._parent.update_targets(*env.target)
                 while not done:
                     action = (
-                        np.random((1, 2)) * args["max_torque"] * 2 - args["max_torque"]
+                        np.random.rand(2) * args["max_torque"] * 2 - args["max_torque"]
                         if start_steps > total_steps
                         else agent.select_action(state)
                     )
@@ -213,10 +222,12 @@ class Train(Widget):
                         c1_loss, c2_loss, a_loss = agent.update_model(
                             memory, args["batch_size"], updates
                         )
-
-                        # TENSORBOARD LOGGING
+                        writer.add_scalar('loss/critic1', c1_loss, updates)
+                        writer.add_scalar('loss/critic2', c2_loss, updates)
+                        writer.add_scalar('loss/actor', a_loss, updates)
                         updates += 1
 
+                    print(action, total_steps)
                     next_state, reward, done = env.step(action[0], action[1])
                     episode_steps += 1
                     total_steps += 1
