@@ -67,8 +67,9 @@ class Env:
         v3 = self.m3.velocity
 
         self.x, self.y = self.system.polar_to_cartesian(p1, p2)
+        target_p1, target_p2 = self.system.cartesian_to_dual_polar(self.x, self.y)
 
-        return p1, v1, p2, v2, p3, v3
+        return p1, v1, p2, v2, p3, v3, target_p1, target_p2
 
     def step(self, t1: float, t2: float, timeout=5) -> tuple:
         self.m1.move(t1)
@@ -187,7 +188,7 @@ class Train(Widget):
             "batch_size": 64,
         }
 
-        state_size = 6
+        state_size = 8
         agent = SAC(state_size, args)
         memory = Replay(25000)
         start_steps = 10000
