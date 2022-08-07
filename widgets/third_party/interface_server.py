@@ -11,6 +11,7 @@ from lib.utils import threaded_callback
 
 
 class Server(Widget):
+    running: bool
     # our setup function creates and integrates some UI elements
     def setup(self):
         ttk.Label(self, text="Server Control").pack(  # create and pack a label
@@ -23,7 +24,7 @@ class Server(Widget):
             command=self._callback,  # and bind it to a callback
         )
         self.button.pack(padx=10, pady=10)  # pack button
-
+        self.running = True
         self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     @threaded_callback
@@ -39,7 +40,7 @@ class Server(Widget):
         self.soc.listen(10)
         client, _ = self.soc.accept()
         self.button.config(text="Connected")
-        while 1:
+        while self.running:
             b = client.recv(1)
             if struct.unpack("c", b)[0] == b"\x01":
                 x = client.recv(4)
@@ -63,8 +64,11 @@ class Server(Widget):
             client.send(struct.pack("f", m1_rot))
             client.send(struct.pack("f", m2_rot))
             client.send(struct.pack("f", z_pos))
-            client.send(struct.pack("f", r_pos))
+            client.send(struct.pack("f", r_pos-m2_rot))
+        else:
+            self.soc.close()
+            client.close()
 
     def close(self):
-        self.soc.close()
+        self.running = False
         super().close()

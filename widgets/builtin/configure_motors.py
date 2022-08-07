@@ -164,6 +164,7 @@ class ConfigureMotors(Widget):
         self.send_var = tk.StringVar()
         self.console_send = ttk.Entry(console_frame, textvariable=self.send_var)
         self.console_send.grid(row = 1, column=1, padx=10, pady=10)
+        self.console_send.bind('<Return>', lambda _: self.selected_motor._send_command(self.send_var.get()))
 
 
         self._select_motor('t1')

@@ -37,7 +37,7 @@ class System:
     # Only one instance of System is intended to exist at a time.
     motors: dict[int, Motor] = {}
     l1: float = 15.5
-    l2: float = 15.25
+    l2: float = 14.7
     minimum_radius: float = 15
 
     def __init__(self):
@@ -69,10 +69,10 @@ class System:
                     continue
         
         try:
-            self.m_vertical = self.motors[1]
+            self.m_vertical  = self.motors[1]
             self.m_inner_rot = self.motors[2]
             self.m_outer_rot = self.motors[3]
-            self.m_end_rot = self.motors[4]
+            self.m_end_rot   = self.motors[4]
         except KeyError:
             msg = 'A serial connection could not be established with at least one motor. ' \
                 + f'Detected motor(s): {[id for id in self.motors]}'
@@ -128,7 +128,7 @@ class System:
         """
 
 
-        self.single_ended_home(self.m_vertical, 140/2, -4)
+        self.single_ended_home(self.m_vertical, 160/2, -4)
         self.end_effector.enable()
         self.auto_calibrate(
             self.end_effector.m, voltage=2, speed=15, zeroSpeed=10

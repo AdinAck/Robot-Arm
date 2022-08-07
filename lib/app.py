@@ -41,13 +41,13 @@ class Application(ttk.Frame):
         from widgets.builtin.visual import Visual
         try:
             from widgets.builtin.hand_tracking import HandTracking
+            self.hand_tracking = HandTracking(self)
         except:
-            messagebox.showwarning('Failed to initialize hand tracking widget.')
+            messagebox.showwarning(__name__, 'Failed to initialize hand tracking widget.')
 
         self.calibration_wizard = CalibrationWizard(self)
         self.configureation_panel = ConfigureMotors(self)
         self.visual = Visual(self)
-        self.hand_tracking = HandTracking(self)
         self.third_party = []
 
         # Initialize Up Robot Arm
@@ -76,6 +76,18 @@ class Application(ttk.Frame):
         self.system.load_motors(self.calibration_wizard.show)
         # self.init_popup.destroy()
         self.create_widgets()
+        self.init_gamepad()
+
+    def init_gamepad(self):
+        # Initialize gamepad
+
+        try:
+            from lib.gamepad import GamePadDelegate
+
+            self.gamepad = GamePadDelegate(self)
+
+        except ImportError as e:
+            messagebox.showerror(__name__, 'Failed to initialize gamepad.')
 
     def create_widgets(self):
         # Menubar
@@ -214,7 +226,7 @@ class Application(ttk.Frame):
             variable=self.target_z_var,
             command=lambda z: self.update_targets(z=round(float(z), 2)),
             from_=0,
-            to=140,
+            to=160,
             orient='horizontal',
         )
         self.target_z_slider.grid(row=r, column=2, padx=5, sticky="WE")
