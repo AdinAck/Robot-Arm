@@ -24,6 +24,7 @@ class Actor(nn.Module):
         self.std_l = nn.Linear(64, 2)
 
     def forward(self, state):
+        state = self.seq(state)
 
         mean = self.mean_l(state)
         std = self.std_l(state)
