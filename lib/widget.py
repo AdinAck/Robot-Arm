@@ -107,7 +107,7 @@ class Control:
             r=_clamp(r, -1.57, 1.57),
             e=_clamp(e, 0, 100)
         )
-
+        
         t1, t2 = self._system.cartesian_to_dual_polar(
             self._parent.target_x_var.get(), self._parent.target_y_var.get()
         )
