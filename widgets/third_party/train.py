@@ -179,7 +179,9 @@ class SAC:
 
 class Train(Widget):
     def setup(self):
-        ttk.Label(self, text="Train").pack(padx=10, pady=10)
+        ttk.Button(self, text="Train", command=self.train).pack(padx=10, pady=10)
+
+    def train(self):
         args = {
             "alpha": 0.2,
             "gamma": 0.99,
