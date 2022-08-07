@@ -12,7 +12,6 @@ from lib.utils import threaded_callback
 
 class Server(Widget):
     running: bool
-
     # our setup function creates and integrates some UI elements
     def setup(self):
         ttk.Label(self, text="Server Control").pack(  # create and pack a label
@@ -25,7 +24,6 @@ class Server(Widget):
             command=self._callback,  # and bind it to a callback
         )
         self.button.pack(padx=10, pady=10)  # pack button
-
         self.running = True
         self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
