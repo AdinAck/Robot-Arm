@@ -30,9 +30,17 @@ class Actor(nn.Module):
 
         mean = self.mean_l(state)
         std = self.std_l(state)
-        std = torch.clamp(std, LOG_SIG_MIN, LOG_SIG_MAX)
+        std = torch.clamp(
+            std, LOG_SIG_MIN, LOG_SIG_MAX
+        )  # test trying clamp between 1e-6 and 1
 
         return mean, std
+
+    def save_checkpoint(self, save_path):
+        torch.save(self.state_dict(), save_path)
+
+    def load_checkpoint(self, save_path):
+        torch.load(save_path, self.state_dict())
 
     def sample(self, state):
         mean, std = self.forward(state)
@@ -47,7 +55,7 @@ class Actor(nn.Module):
         log_prob = normal.log_prob(x_t)
         log_prob -= torch.log(
             self.max_torque * (1 - y_t.pow(2)) + epsilon
-        )  # not sure why i need this but i do i think
+        )  # add episolon to prevent log 0
         log_prob = log_prob.sum(1, keepdim=True)
 
         mean = torch.tanh(mean) * self.max_torque
