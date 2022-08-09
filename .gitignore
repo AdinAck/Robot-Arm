@@ -1,3 +1,5 @@
 __pycache__
 config/
 .DS_Store
+runs/
+saves/

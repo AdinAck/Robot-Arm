@@ -382,6 +382,6 @@ class Motor:
         if self.control_mode == 'angle':
             pos = round(pos + self.offset, 3)
 
-        if self._send_command(f'M{pos}', float) != pos:
+        if (recv := self._send_command(f'M{pos}', float)) != pos:
             raise MotorException(
-                'Failed to set target position: Mismatched confirmation message.')
+                f'Failed to set target position: Mismatched confirmation message. Received: {recv}, Expected: {pos}')
