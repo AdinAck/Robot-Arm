@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.optim as optim
 from lib.mllib.model import Actor, QNetwork, VNetwork
 from lib.mllib.replay_memory import Replay
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 from time import time
 
 from hardware.FOCMC_interface import Motor
@@ -236,7 +236,7 @@ class Train(Widget):
         state_size = 8
         agent = SAC(state_size, args)
         memory = Replay(4000)
-        writer = SummaryWriter()
+        wandb.init(project="SAC-RobotArm", config=args)
         start_steps = 200
         total_steps = 0
         updates = 0
@@ -260,11 +260,7 @@ class Train(Widget):
                         c1_loss, c2_loss, a_loss, alpha_loss, alpha_logs = agent.update_model(
                             memory, args["batch_size"], updates, starting
                         )
-                        writer.add_scalar("loss/critic1", c1_loss, updates)
-                        writer.add_scalar("loss/critic2", c2_loss, updates)
-                        writer.add_scalar("loss/actor", a_loss, updates)
-                        writer.add_scalar("loss/entropy", alpha_loss, updates)
-                        writer.add_scalar("temperature/alpha", alpha_logs, updates)
+                        wandb.log({"critic1_loss": c1_loss, "critic2_loss": c2_loss, "actor_loss": a_loss, "entropy": alpha_loss, "alpha": alpha_logs})
                         updates += 1
 
                     print(action, total_steps)
@@ -272,7 +268,7 @@ class Train(Widget):
                     episode_steps += 1
                     total_steps += 1
                     episode_reward += reward
-                    writer.add_scalar('reward/step', reward, total_steps)
+                    wandb.log({"reward/step": reward})
                     mask = 0 if done == -1 else done
 
                     memory.push(state, action, reward, next_state, mask)
@@ -281,7 +277,7 @@ class Train(Widget):
                 print(
                     f"Episode {i}, episode steps {episode_steps}, episode reward {episode_reward}"
                 )
-                writer.add_scalar('reward/episode', episode_reward, i)
+                wandb.log({"reward/episode": episode_reward})
 
                 if total_steps % 300 == 0:
                     agent.save_models(total_steps)
