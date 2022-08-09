@@ -145,7 +145,8 @@ class SAC:
 
         self.actor = Actor(state_size, self.max_torque).to(self.device)
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=3e-4)
-
+        
+        wandb.watch([self.critic, self.critic_target, self.actor], log='all')
         if self.entropy_tune:
             self.target_entropy = -2
             self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
