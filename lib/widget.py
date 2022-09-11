@@ -63,7 +63,7 @@ class Control:
         Returns
         -------
         tuple[float, float, float, float, int]
-            x, y, z, r, e positions.
+            x, y, z, r positions.
         """
 
         t1, t2, z = self._system.get_all_pos()
